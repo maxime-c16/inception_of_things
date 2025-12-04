@@ -1,0 +1,44 @@
+# p1/Vagrantfile
+# Setup configuration header
+
+Vagrant.configure("2") do |config|
+	config.vm.box = "almalinux/9"
+	config.vm.provider "virtualbox"  # Force VirtualBox as the provider
+	config.vm.boot_timeout = 600     # 10 minutes timeout for nested virtualization
+	
+	LOGIN = "macauchy"
+	SERVER_IP = "192.168.56.110"
+	WORKER_IP = "192.168.56.111"
+
+# --- SERVER NODE --- (controller)
+config.vm.define "#{LOGIN}S" do |server|
+	server.vm.hostname = "#{LOGIN}S"
+	server.vm.network "private_network", ip: "#{SERVER_IP}"
+
+	# Increased resources for nested virtualization
+	server.vm.provider "virtualbox" do |vb|
+		vb.memory = "2048"
+		vb.cpus = 2
+		vb.name = "#{LOGIN}S"
+	end
+
+	# Provisioning script
+	server.vm.provision "shell", path: "scripts/setup_server.sh"
+	end
+
+# --- WORKER NODE --- (client)
+config.vm.define "#{LOGIN}SW" do |worker|
+	worker.vm.hostname = "#{LOGIN}SW"
+	worker.vm.network "private_network", ip: "#{WORKER_IP}"
+
+	# Increased resources for nested virtualization
+	worker.vm.provider "virtualbox" do |vb|
+		vb.memory = "2048"
+		vb.cpus = 2
+		vb.name = "#{LOGIN}SW"
+	end
+
+	# Provisioning script
+	worker.vm.provision "shell", path: "scripts/setup_worker.sh"
+	end
+end
