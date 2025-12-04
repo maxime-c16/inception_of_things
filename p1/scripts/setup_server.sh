@@ -3,8 +3,8 @@ set -e
 
 echo "=== Installing K3s Server ==="
 
-# Install k3s in SERVER mode
-curl -sfL https://get.k3s.io | sh -
+# Install k3s in SERVER mode with private network configuration
+curl -sfL https://get.k3s.io | K3S_ADVERTISE_ADDRESS=192.168.56.110 K3S_NODE_IP=192.168.56.110 sh -
 
 echo "=== K3s Server installed, waiting for token ==="
 

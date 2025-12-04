@@ -1,0 +1,25 @@
+# Vagrant-related files
+.vagrant/
+
+# Temporary files
+*.tmp
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE specific files
+.idea/
+.vscode/
+*.iml
+
+# Kubernetes config files
+kubeconfig.yaml
+k3s.yaml
+
+# Backup files
+*~.bak
+
+# Node token files
+node-token
