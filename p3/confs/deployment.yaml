@@ -15,8 +15,8 @@ spec:
     spec:
       containers:
       - name: app
-        # Using the wil42/playground app from the spec (with v1 version)
-        image: wil42/playground:v1
+        # Using the wil42/playground app from the spec (with v2 version)
+        image: wil42/playground:v2
         ports:
         - containerPort: 8888
         livenessProbe:
