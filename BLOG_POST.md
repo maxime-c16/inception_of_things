@@ -1093,7 +1093,7 @@ We're starting fresh with a simpler setup. Don't destroy your Part 1 cluster yet
 - ✅ VirtualBox running and accessible
 
 **What We're Doing:**
-Instead of just having an empty cluster, we're now deploying **real applications** that actually do things. You'll deploy web services that respond to HTTP requests and route them by hostname.
+Instead of just having an empty cluster, we're now deploying **real applications** that actually do things. You'll deploy web services that respond to HTTP requests and route them by hostname. The good news: `vagrant up` automatically deploys everything for you—no manual kubectl commands needed!
 
 **The Big Picture:**
 Part 1 taught you "How do I build a cluster?"
@@ -1348,36 +1348,36 @@ External Request to 192.168.56.110
 ```bash
 cd p2
 
-# Create the VM
+# Create the VM (this automatically deploys all applications)
 vagrant up
 
 # This time:
 # - Single VM (simpler)
 # - More memory (4GB for apps)
 # - VirtualBox 7 fixes for nested virt
+# - Applications deployed automatically during provisioning
 
-# SSH and deploy
+# SSH and verify everything is running
 vagrant ssh macauchyS
 
-# Inside VM:
-export KUBECONFIG=/vagrant/k3s.yaml
-
-# Apply application manifests
-kubectl apply -f /vagrant/confs/apps.yaml
-
-# Apply ingress rules
-kubectl apply -f /vagrant/confs/ingress.yaml
-
-# Verify everything
+# Inside VM, verify the deployments are already created:
 kubectl get deployments
+# NAME        READY   UP-TO-DATE   AVAILABLE   AGE
+# app-one     1/1     1            1           2s
+# app-two     3/3     3            3           2s
+# app-three   1/1     1            1           2s
+
 kubectl get services
+# Shows: app-one-svc, app-two-svc, app-three-svc
+
 kubectl get ingress
+# Shows: main-ingress with routes for app1.com and app2.com
 
 # Test from host:
-# Option 1: Edit /etc/hosts
+# Option 1: Edit /etc/hosts (for hostname-based testing)
 sudo bash -c 'echo "192.168.56.110 app1.com app2.com" >> /etc/hosts'
 
-# Then:
+# Then test with hostnames:
 curl http://app1.com
 # Response: "Hello from App One"
 
@@ -1387,8 +1387,15 @@ curl http://app2.com
 curl http://192.168.56.110
 # Response: "Hello from App Three" (default route)
 
-# Option 2: Use curl Host header (no /etc/hosts edit)
+# Option 2: Use curl Host header (no /etc/hosts edit needed)
 curl -H "Host: app1.com" http://192.168.56.110
+# Response: "Hello from App One"
+
+curl -H "Host: app2.com" http://192.168.56.110
+# Response: "Hello from App Two"
+
+curl http://192.168.56.110
+# Response: "Hello from App Three"
 ```
 
 ### Understanding Scaling
