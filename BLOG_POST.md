@@ -583,6 +583,8 @@ This project takes you through each concept, building from simple (single VM) to
 └─────────────────────────────────────────────┘
 ```
 
+> **⚠️ Note:** When you run `vagrant up`, if the VM crashes with a VirtualBox hypervisor error, don't panic! This has been encountered and fixed. See [Issue 4: VirtualBox Hypervisor Crashes](#issue-4-virtualbox-hypervisor-crashes-during-provisioning) in the troubleshooting section for solutions.
+
 ### Understanding Vagrant: Infrastructure as Code
 
 **What is Vagrant?**
@@ -950,6 +952,85 @@ sed -i 's/127.0.0.1/192.168.56.110/g' p1/k3s.yaml
 vim p1/k3s.yaml
 # Change: server: https://127.0.0.1:6443
 # To: server: https://192.168.56.110:6443
+```
+
+**Issue 4: VirtualBox Hypervisor Crashes During Provisioning**
+
+This was a major issue we encountered during development. If `vagrant up` suddenly crashes with "A critical error has occurred," here's what was happening and how we fixed it.
+
+**What happened:**
+```
+vagrant up
+... some output ...
+[VM suddenly crashes]
+The VirtualBox VM was killed by the hypervisor
+```
+
+**Root causes we discovered:**
+
+The setup scripts were doing things that caused VirtualBox to crash during provisioning:
+
+1. **Complex text processing pipelines** - Using many piped commands like:
+   ```bash
+   # ❌ This caused crashes:
+   ip link show | grep -E "^[0-9]+:" | grep -v lo | awk -F: '{print $2}' | sed 's/.../' | tail -1
+   ```
+   Each pipe adds overhead, and during provisioning the hypervisor would become unstable.
+
+2. **Aggressive network configuration** - Trying to forcefully change network settings via `nmcli`:
+   ```bash
+   # ❌ This caused crashes:
+   nmcli conn down eth1
+   nmcli conn up eth1
+   ```
+   Network interface cycling during VM provisioning triggers hypervisor instability.
+
+3. **Complex file operations** - Embedding Python YAML parsers in shell heredocs caused permission issues and resource contention.
+
+**How we fixed it:**
+
+We simplified everything to the absolute minimum:
+
+```bash
+# ✅ This is stable:
+for iface in eth1 enp0s8 enp0s9 enp0s10; do
+    if ip link show "$iface" &>/dev/null; then
+        INTERFACE="$iface"
+        break
+    fi
+done
+```
+
+This approach:
+- Checks interface existence before trying to use it
+- Supports both legacy (eth1) and modern (enp0s8) interface names
+- Reduces system load during provisioning
+- Is explicit and easy to debug
+
+**Key learnings:**
+
+When writing Vagrant provisioning scripts:
+1. Keep them **as simple as possible**
+2. Avoid complex command pipelines
+3. Never manipulate network state aggressively
+4. Use basic shell commands only (no embedded Python/Ruby)
+5. Test locally before deploying
+
+**If you hit a crash:**
+
+```bash
+# 1. Clean up completely
+vagrant destroy -f
+rm -rf .vagrant
+
+# 2. Try again
+vagrant up
+
+# 3. If it crashes again, check:
+# - Host has enough resources (4GB+ RAM free)
+# - Disk space is available (1GB+ free)
+# - No other VMs running
+# - VirtualBox version is 7.0+
 ```
 
 ---
