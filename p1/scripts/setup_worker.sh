@@ -1,6 +1,29 @@
 #!/bin/bash
 set -e
 
+echo "=== Detecting Network Configuration ==="
+
+# Wait for eth1 to get an IP (Vagrant assigns it)
+INTERFACE="eth1"
+NODE_IP=""
+
+echo "Waiting for $INTERFACE to be assigned an IP address..."
+for i in {1..30}; do
+    NODE_IP=$(ip addr show "$INTERFACE" 2>/dev/null | grep "inet " | awk '{print $2}' | cut -d/ -f1)
+    if [ -n "$NODE_IP" ]; then
+        echo "✓ Interface $INTERFACE configured with IP: $NODE_IP"
+        break
+    fi
+    echo "Attempt $i/30: Waiting for IP assignment..."
+    sleep 1
+done
+
+if [ -z "$NODE_IP" ]; then
+    echo "ERROR: Could not detect IP on $INTERFACE"
+    exit 1
+fi
+
+echo ""
 echo "=== Setting up K3s Worker ==="
 
 # Fetch token from server via HTTP (server exposes it temporarily)
@@ -26,7 +49,7 @@ fi
 
 echo "=== Token received, installing K3s Agent ==="
 
-# Install k3s in AGENT mode with private network configuration
-curl -sfL https://get.k3s.io | K3S_URL=https://192.168.56.110:6443 K3S_TOKEN=$TOKEN INSTALL_K3S_EXEC="--node-ip=192.168.56.111 --flannel-iface=eth1" sh -
+# Install k3s in AGENT mode with detected IP
+curl -sfL https://get.k3s.io | K3S_URL=https://192.168.56.110:6443 K3S_TOKEN=$TOKEN INSTALL_K3S_EXEC="--node-ip=${NODE_IP} --flannel-iface=eth1" sh -
 
 echo "=== K3s Worker setup complete ==="
