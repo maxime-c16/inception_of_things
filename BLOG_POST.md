@@ -1414,35 +1414,40 @@ spec:
 # Check pods
 kubectl get pods -l app=app-two
 
-# Output:
-# NAME           READY   STATUS    RESTARTS   AGE
-# app-two-aaa    1/1     Running   0          10s
-# app-two-bbb    1/1     Running   0          10s
-# app-two-ccc    1/1     Running   0          10s
+# Output (note: K8s generates hash-based pod names, not sequential):
+# NAME                       READY   STATUS    RESTARTS   AGE
+# app-two-6d55484f4d-9kz7h   1/1     Running   0          10s
+# app-two-6d55484f4d-d2ggz   1/1     Running   0          10s
+# app-two-6d55484f4d-nxhxs   1/1     Running   0          10s
 
 # Service load-balances across all three
 for i in {1..6}; do
   curl -H "Host: app2.com" http://192.168.56.110
 done
-# Responses come from different pods
-# K8s distributes traffic
+# All respond with: "Hello from App Two"
+# Service distributes traffic across the 3 pods
+# (responses look identical because all pods serve the same content)
 
-# Kill a pod
-kubectl delete pod app-two-aaa
+# Kill a pod (using actual pod name)
+kubectl delete pod app-two-6d55484f4d-9kz7h
 
 # K8s immediately creates replacement
 kubectl get pods -l app=app-two
-# Still 3 pods!
-# This is self-healing
+# Still 3 pods! New one: app-two-6d55484f4d-cz5lh
+# This is self-healing in action
 
 # Scale up to 5
 kubectl scale deployment app-two --replicas=5
 kubectl get pods -l app=app-two
-# Now 5 running!
+# Now 5 running! (with new auto-generated names)
 
 # Scale down to 2
 kubectl scale deployment app-two --replicas=2
 # K8s terminates 3 pods gracefully
+kubectl get pods -l app=app-two
+# NAME                       READY   STATUS    RESTARTS   AGE
+# app-two-6d55484f4d-d2ggz   1/1     Running   0          11m
+# app-two-6d55484f4d-nxhxs   1/1     Running   0          10m
 ```
 
 ### What You've Learned in Part 2
