@@ -3,17 +3,24 @@ set -e
 
 echo "=== Detecting Network Configuration ==="
 
-# Auto-detect the second network interface (supports eth1, enp0s8, etc.)
-# Skip lo (loopback) and eth0/enp0s3 (NAT), use the second interface (private network)
-INTERFACE=$(ip link show | grep -E "^[0-9]+:" | grep -v lo | awk -F: '{print $2}' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tail -1)
-NODE_IP=""
+# Auto-detect the second network interface
+# Try common names first: eth1, enp0s8, enp0s9 (in order)
+INTERFACE=""
+for iface in eth1 enp0s8 enp0s9 enp0s10; do
+    if ip link show "$iface" &>/dev/null; then
+        INTERFACE="$iface"
+        echo "Detected network interface: $INTERFACE"
+        break
+    fi
+done
 
 if [ -z "$INTERFACE" ]; then
-    echo "ERROR: Could not detect network interface"
+    echo "ERROR: Could not detect network interface (tried: eth1, enp0s8, enp0s9, enp0s10)"
     exit 1
 fi
 
-echo "Detected network interface: $INTERFACE"
+NODE_IP=""
+
 echo "Waiting for $INTERFACE to be assigned an IP address..."
 for i in {1..30}; do
     NODE_IP=$(ip addr show "$INTERFACE" 2>/dev/null | grep "inet " | awk '{print $2}' | cut -d/ -f1)
