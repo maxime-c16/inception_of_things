@@ -26,6 +26,9 @@ fi
 
 echo "=== K3s API ready, deploying applications ==="
 
+# Make kubeconfig readable
+chmod 644 /etc/rancher/k3s/k3s.yaml
+
 # Create a temporary kubeconfig
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
