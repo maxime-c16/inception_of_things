@@ -2,23 +2,430 @@
 
 **Published:** January 2026
 **Author:** Learning through Implementation
-**Reading Time:** 45 minutes
-**Difficulty:** Intermediate
-**Topics:** Kubernetes, K3s, K3d, Vagrant, Argo CD, GitOps
+**Reading Time:** 90 minutes (comprehensive with glossary)
+**Difficulty:** Beginner → Advanced
+**Topics:** Kubernetes, K3s, K3d, Vagrant, Argo CD, GitOps, Infrastructure as Code
+
+---
+
+## Quick Navigation
+
+- **Absolute Beginner?** → Start with [Glossary & Jargon Breakdown](#glossary--jargon-breakdown)
+- **Know some Docker/Linux?** → Start with [What This Project Teaches](#what-this-project-teaches)
+- **Familiar with Kubernetes?** → Jump to [Part 3: GitOps with Argo CD](#part-3-gitops-with-argo-cd)
+- **Getting an error?** → Go to [Common Pitfalls & Solutions](#common-pitfalls--solutions)
 
 ---
 
 ## Table of Contents
 
-1. [Introduction](#introduction)
-2. [What This Project Actually Teaches](#what-this-project-teaches)
-3. [Prerequisites & Setup](#prerequisites--setup)
-4. [Part 1: Building Your First Multi-Node K3s Cluster](#part-1-building-your-first-multi-node-k3s-cluster)
-5. [Part 2: Running Applications on Kubernetes](#part-2-running-applications-on-kubernetes)
-6. [Part 3: GitOps with Argo CD](#part-3-gitops-with-argo-cd)
-7. [Common Pitfalls & Solutions](#common-pitfalls--solutions)
-8. [Reflections & Key Learnings](#reflections--key-learnings)
-9. [Going Deeper](#going-deeper)
+1. [Glossary & Jargon Breakdown](#glossary--jargon-breakdown)
+2. [Introduction](#introduction)
+3. [What This Project Actually Teaches](#what-this-project-teaches)
+4. [Prerequisites & Setup](#prerequisites--setup)
+5. [Part 1: Building Your First Multi-Node K3s Cluster](#part-1-building-your-first-multi-node-k3s-cluster)
+6. [Part 2: Running Applications on Kubernetes](#part-2-running-applications-on-kubernetes)
+7. [Part 3: GitOps with Argo CD](#part-3-gitops-with-argo-cd)
+8. [Common Pitfalls & Solutions](#common-pitfalls--solutions)
+9. [Reflections & Key Learnings](#reflections--key-learnings)
+10. [Going Deeper](#going-deeper)
+11. [Practical Command Reference](#practical-command-reference)
+
+---
+
+## Glossary & Jargon Breakdown
+
+### Essential Terminology (Beginner Level)
+
+#### **Container**
+**What:** A standardized package containing your application, its dependencies, libraries, and configuration.
+
+**Why:** Before containers, deploying software was nightmare. "Works on my machine but not on the server" was a common phrase. Containers solve this by bundling everything the app needs.
+
+**Analogy:** Shipping container. Just like a physical shipping container is the same whether it's on a truck, ship, or train, a Docker container works identically on your laptop, test server, or production server.
+
+**Example:**
+```bash
+# Without containers: "Install Python 3.10, pip install requests, set ENV vars..."
+# With containers: "docker run python:3.10"
+# The container already has everything configured
+```
+
+---
+
+#### **Docker**
+**What:** Software that builds, runs, and manages containers. It's the most popular container technology.
+
+**Why:** Docker makes containers practical. Without it, containers would exist but be hard to use.
+
+**Beginner Understanding:** Docker = container factory
+- `docker build` = create a container image (recipe)
+- `docker run` = start a container (cook from recipe)
+- `docker push` = upload to Docker Hub (share recipe)
+
+**Professional Understanding:** Docker uses Linux kernel features (namespaces, cgroups) to isolate processes while sharing the kernel. This is why it's faster than VMs.
+
+---
+
+#### **Virtual Machine (VM)**
+**What:** A complete simulation of a computer, running its own operating system and applications independently.
+
+**Why:** Allows running multiple operating systems on one physical computer. Useful for testing, isolation, and development.
+
+**Beginner Understanding:** VM = full computer in software
+- Requires full OS (bootable, 1-5 GB)
+- Takes minutes to start
+- Uses significant RAM (per OS)
+
+**Professional Understanding:** VMs use hypervisors (Type 1: bare-metal like Hyper-V, or Type 2: hosted like VirtualBox) to virtualize CPU, memory, disk, and network. More overhead than containers but better isolation.
+
+---
+
+#### **Kubernetes (K8s)**
+**What:** A container orchestration system. It manages, scales, and deploys containers across multiple machines automatically.
+
+**Why:** When you have 100 containers running, you can't manage them manually. Kubernetes automates this.
+
+**Beginner Understanding:** Kubernetes = container manager
+- You tell it "I want 5 copies of my app running"
+- Kubernetes ensures 5 are always running
+- If one crashes, Kubernetes replaces it
+
+**Professional Understanding:** Kubernetes is a control plane + worker architecture running containerized workloads. It provides declarative configuration, self-healing, rolling updates, and resource management. It's extensible via CRDs and has a rich ecosystem.
+
+---
+
+#### **K3s**
+**What:** A lightweight, simplified version of Kubernetes designed for edge computing, IoT, and learning.
+
+**Why:** Full Kubernetes is complex (~200 GB of documentation). K3s keeps the essential features while being learnable.
+
+**Key Difference from K8s:**
+- Full Kubernetes: ~500 MB, complex, enterprise-ready
+- K3s: ~100 MB, simple, learning-friendly
+- Both speak the same language (kubectl commands work identically)
+
+**Beginner:** "K3s is Kubernetes lite"
+**Professional:** K3s bundles container runtime, networking, storage into single binary. Removes alpha APIs and reduces dependencies.
+
+---
+
+#### **K3d**
+**What:** A tool that runs K3s clusters inside Docker containers instead of VMs.
+
+**Why:** K3s in Docker = super fast. Spin up a 3-node cluster in 10 seconds instead of 3 minutes.
+
+**Comparison:**
+```
+K3s on Vagrant (Part 1-2):
+  Vagrant → VirtualBox VM → Linux → K3s → Containers
+  Complexity: High, Speed: 3-5 minutes
+
+K3d (Part 3):
+  K3d → Docker Container → K3s → Containers
+  Complexity: Low, Speed: 10-30 seconds
+```
+
+---
+
+#### **Container Image**
+**What:** A static, read-only template describing how to create a container.
+
+**Why:** You need a recipe before you can cook. Images are the recipes.
+
+**Beginner Understanding:**
+```bash
+docker run ubuntu:22.04
+# Downloads the ubuntu:22.04 image
+# Creates a container from it
+# Starts it
+
+# Image: the file on disk (the recipe)
+# Container: the running process (the cooked meal)
+```
+
+**Professional Understanding:** Images are layered (union filesystem). Each layer is immutable. When you build an image, you create new layers on top of a base image. This enables caching and efficient storage.
+
+---
+
+#### **Deployment**
+**What:** A Kubernetes resource describing how to run containers. It specifies replicas, resources, health checks, and update strategy.
+
+**Why:** Ensures containers run reliably. Replaces old pods when updating, heals failed pods automatically.
+
+**Beginner Understanding:** "I want 3 copies of my app running, always"
+
+**YAML Example:**
+```yaml
+kind: Deployment
+metadata:
+  name: my-app
+spec:
+  replicas: 3          # Always run 3 copies
+  template:            # Template for each pod
+    spec:
+      containers:
+      - name: app
+        image: my-app:v1  # What image to run
+```
+
+---
+
+#### **Pod**
+**What:** The smallest deployable unit in Kubernetes. Usually contains one container (sometimes multiple tightly-coupled containers).
+
+**Why:** Kubernetes can't run bare containers. Pods wrap containers and provide networking, storage, and lifecycle management.
+
+**Beginner Understanding:** Pod ≈ Container (they're almost the same, Pod is just the K8s wrapper)
+
+**Professional Understanding:** Pods are ephemeral (short-lived). They share network namespace, have shared storage, and are tightly coupled. Multiple containers in one pod share network (localhost) and storage but not compute.
+
+---
+
+#### **Service**
+**What:** A Kubernetes resource that creates a stable network endpoint for accessing pods.
+
+**Why:** Pods die and respawn. Services provide a consistent IP/DNS name.
+
+**Beginner Understanding:** "How do I access my pod when it keeps crashing and respawning?"
+
+**Answer:** Service routes traffic to whatever pods are alive.
+
+**Example:**
+```yaml
+kind: Service
+metadata:
+  name: my-app-service
+spec:
+  selector:
+    app: my-app      # Route to pods with this label
+  ports:
+  - port: 80         # Service port
+    targetPort: 8080 # Pod container port
+```
+
+Clients connect to `my-app-service:80`, service forwards to any pod with `app: my-app` label on port 8080.
+
+---
+
+#### **Ingress**
+**What:** A Kubernetes resource for routing external HTTP/HTTPS traffic to services based on hostnames or paths.
+
+**Why:** Services are internal. Ingress exposes apps to the internet and provides hostname-based routing.
+
+**Beginner Understanding:** "I want example.com → my-app, api.example.com → my-api"
+
+---
+
+#### **Namespace**
+**What:** A logical partition within a cluster, providing isolated environments and resource quotas.
+
+**Why:** Multiple teams/apps need isolation. Namespaces prevent them from interfering.
+
+**Example:**
+```bash
+kubectl create namespace dev
+kubectl create namespace prod
+
+# Objects in different namespaces don't interact
+# dev-app can't see prod-app
+
+# Run pods in specific namespace:
+kubectl run my-pod --namespace=dev
+```
+
+---
+
+### Intermediate Jargon (For Those With Some Experience)
+
+#### **Declarative vs Imperative Configuration**
+
+**Imperative (Old Way):**
+```bash
+# "Do these steps"
+kubectl run my-app --image=my-app:v1
+kubectl expose deployment my-app --port=80
+kubectl scale deployment my-app --replicas=3
+```
+Problems: Hard to track changes, not version-controlled, not reproducible
+
+**Declarative (Modern Way):**
+```yaml
+# "This is the desired state"
+kind: Deployment
+metadata:
+  name: my-app
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: app
+        image: my-app:v1
+```
+Benefits: Version-controlled, reproducible, diffable, reviewable
+
+---
+
+#### **Reconciliation Loop**
+**What:** Kubernetes continuously checking actual state vs desired state and fixing differences.
+
+**Why:** Self-healing. If you specify "3 replicas" and a pod dies, K8s creates a replacement.
+
+**Beginner Understanding:** K8s is always asking "Is the cluster in the desired state? If not, fix it."
+
+**Professional Understanding:** This is the core principle enabling Kubernetes's reliability. Controllers implement this loop for different resources (Deployment controller, StatefulSet controller, etc.).
+
+---
+
+#### **Custom Resource Definition (CRD)**
+**What:** A way to extend Kubernetes with custom resource types beyond built-in ones.
+
+**Why:** Kubernetes only has Deployment, Service, etc. Some apps need special types (e.g., Argo CD defines "Application" as a CRD).
+
+**Example:**
+```yaml
+# Standard Kubernetes resource
+kind: Deployment
+
+# Custom resource (defined by Argo CD)
+kind: Application
+```
+
+---
+
+#### **Helm**
+**What:** A package manager for Kubernetes, like `apt` for Linux or `npm` for Node.
+
+**Why:** Writing YAML manually is tedious. Helm provides pre-made templates (charts).
+
+**Beginner Understanding:** Instead of hand-writing Postgres Deployment YAML:
+```bash
+helm install postgres bitnami/postgresql
+# Deploys Postgres with best practices
+```
+
+**Professional Understanding:** Helm uses Go templates for YAML, provides versioning, dependency management, and rollback capabilities. Charts can be shared via Helm repositories.
+
+---
+
+#### **Kustomize**
+**What:** A native K8s templating tool (built into kubectl) for managing YAML variations.
+
+**Why:** You have dev/prod/staging environments with slight differences. Kustomize manages these variations.
+
+**Example:**
+```
+base/
+  deployment.yaml
+overlays/
+  dev/
+    kustomization.yaml (override replicas: 1)
+  prod/
+    kustomization.yaml (override replicas: 5)
+```
+
+---
+
+#### **ConfigMap and Secret**
+**What:** Ways to inject configuration and sensitive data into pods.
+
+**Why:** Apps need configuration. You don't hardcode credentials in container images.
+
+**ConfigMap:** Non-sensitive configuration
+```yaml
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  DATABASE_URL: "postgres://db:5432/mydb"
+  LOG_LEVEL: "debug"
+```
+
+**Secret:** Sensitive data (base64 encoded, encrypted at rest)
+```yaml
+kind: Secret
+metadata:
+  name: app-secrets
+data:
+  API_KEY: base64(actual-key)
+  PASSWORD: base64(actual-password)
+```
+
+---
+
+#### **RBAC (Role-Based Access Control)**
+**What:** Kubernetes authorization system controlling what users/services can do.
+
+**Why:** Security. You don't want developers deleting production database pods.
+
+**Example:**
+```yaml
+kind: Role
+metadata:
+  name: pod-reader
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+# User with this role can read pods but not delete
+```
+
+---
+
+### Advanced Jargon (Professional Level)
+
+#### **Control Plane vs Data Plane**
+**Control Plane:** API server, etcd, scheduler, controllers. Makes decisions.
+
+**Data Plane:** Worker nodes running containers. Executes decisions.
+
+**Understanding:** Control plane says "I want 3 pods," data plane runs them.
+
+---
+
+#### **Operators**
+**What:** Kubernetes extensions that automate complex, stateful applications.
+
+**Why:** Some apps need custom logic (e.g., database failover, backup scheduling). Operators encode this logic.
+
+**Example:** Prometheus Operator watches PrometheusOperator CRD, automatically creates Prometheus instances, configures scraping targets, manages RBAC.
+
+---
+
+#### **Service Mesh**
+**What:** A dedicated infrastructure layer managing service-to-service communication.
+
+**Why:** As systems scale, managing inter-service communication becomes complex. Service mesh (Istio, Linkerd) handles this transparently.
+
+**Capabilities:** Load balancing, circuit breaking, canary deployments, mTLS, observability.
+
+---
+
+#### **GitOps**
+**What:** Operational model where Git is the source of truth for desired state.
+
+**Why:** Combines benefits of Git (version control, audit trail, review process) with Kubernetes (automated enforcement).
+
+**Flow:**
+```
+You commit to Git
+  ↓
+GitOps controller (e.g., Argo CD) detects change
+  ↓
+Controller applies manifests to cluster
+  ↓
+Cluster converges to Git state
+  ↓
+Everything is auditable via Git history
+```
+
+---
+
+#### **Admission Controllers**
+**What:** Webhooks that validate or mutate Kubernetes objects before they're stored.
+
+**Why:** Enforce policies. Reject pods not running as non-root, auto-inject sidecars, validate labels.
 
 ---
 
@@ -31,662 +438,693 @@ This guide documents the complete journey of building three progressively sophis
 ### What Problem Are We Solving?
 
 In 2024, here's the reality of infrastructure:
-- **Manual deployments are dead** - They're error-prone, undocumented, and don't scale
-- **Infrastructure as Code is essential** - Everything should be version-controlled and reproducible
-- **Kubernetes is the standard** - But it's complex, and learning it properly matters
-- **GitOps is the future** - Your Git repository becomes your single source of truth
 
-This project takes you through each of these concepts, starting simple and building to professional practices.
+**Manual deployments are dead** - They're error-prone, undocumented, and don't scale
+- Deploying via SSH and shell commands is slow
+- Changes aren't tracked (what changed? when? why?)
+- Disasters happen when someone makes a typo
+- New team members don't know the history
+
+**Infrastructure as Code is essential** - Everything should be version-controlled and reproducible
+- Your infrastructure is code (Vagrantfiles, YAML manifests)
+- It's in Git (full history, blame, rollback)
+- It's reviewed (pull requests, CI/CD)
+- It's tested (dry-runs, staging environments)
+
+**Kubernetes is the standard** - But it's complex, and learning it properly matters
+- Container orchestration is the modern baseline
+- Understanding it deeply opens career opportunities
+- Getting it wrong costs real money in operational overhead
+
+**GitOps is the future** - Your Git repository becomes your single source of truth
+- Deployments are automated from Git
+- Rollback is `git revert`
+- Disaster recovery is `git checkout <good-commit>`
+- Everything is auditable
+
+This project takes you through each concept, building from simple (single VM) to sophisticated (multi-node cluster with GitOps automation).
 
 ---
 
-## What This Project Teaches
+## What This Project Actually Teaches
 
 ### Technical Skills You'll Develop
 
 **Infrastructure Automation**
-- Writing Vagrantfiles from scratch
-- Automating VM provisioning with bash
-- Understanding multi-node networking
+- Writing Vagrantfiles that describe VMs as code
+- Automating VM provisioning with bash scripts
+- Understanding networking between VMs
+- Creating reproducible infrastructure
 
 **Kubernetes Fundamentals**
-- Installing and configuring K3s (lightweight Kubernetes)
-- Creating deployments, services, and ingress rules
-- Understanding namespaces and resource management
+- Installing and configuring K3s (why lightweight K8s matters)
+- Creating Deployments (managing multiple pod replicas)
+- Creating Services (exposing pods via network endpoints)
+- Creating Ingress rules (routing external traffic)
+- Understanding Namespaces (logical isolation)
 
 **Container Orchestration**
-- Running multiple applications on one cluster
-- Service discovery and DNS
-- Load balancing and routing
+- Scaling applications (replicas)
+- Self-healing (K8s restarts crashed pods)
+- Rolling updates (deploy new versions without downtime)
+- Resource management (CPU, memory limits)
 
 **Modern DevOps Practices**
-- Infrastructure as Code (IaC)
-- Continuous Deployment (CD)
-- GitOps workflows
-- Configuration management
+- Infrastructure as Code (IaC) - infrastructure in version control
+- Continuous Deployment (CD) - automatic deployments
+- GitOps workflows - Git as single source of truth
+- Configuration management - ConfigMaps and Secrets
 
 **Practical Development**
-- Git workflows and conventions
+- Git workflows (commits, branches, merges)
 - Shell scripting best practices
 - Debugging Kubernetes issues
 - Testing deployments
 
-### The Learning Progression
+### Learning Progression: From Confusion to Understanding
 
-```
-Part 1: "I can create VMs"
-    ↓
-    (Learn: Networking, SSH, K3s basics)
-    ↓
-Part 2: "I can run apps on Kubernetes"
-    ↓
-    (Learn: Manifests, Ingress, Load Balancing)
-    ↓
-Part 3: "I can automate deployments from Git"
-    ↓
-    (Learn: GitOps, Argo CD, Continuous Deployment)
-```
+**Part 1: "I can create and configure VMs"**
+- What you learn: Vagrant, VM networking, K3s basics
+- What you build: 2-node Kubernetes cluster
+- Aha moment: Infrastructure can be described as code!
+
+**Part 2: "I can run applications on Kubernetes"**
+- What you learn: Deployments, Services, Ingress
+- What you build: Single-node cluster with 3 apps and routing
+- Aha moment: Kubernetes automatically manages apps for me!
+
+**Part 3: "I can automate deployments from Git"**
+- What you learn: K3d, Argo CD, GitOps
+- What you build: Automated deployment pipeline
+- Aha moment: I never have to manually deploy again!
 
 ---
 
 ## Prerequisites & Setup
 
-Before you start, make sure you have:
+### Required Software (What Each One Does)
 
-### Required Software
+**Vagrant** (Infrastructure provisioning tool)
+- **What:** Describes VMs in code (Vagrantfile)
+- **Why:** Reproducible infrastructure, version control friendly
+- **Check installation:** `vagrant --version` (need 2.4.0+)
 
-```bash
-# Check what's installed
-vagrant --version        # Should be 2.4.0+
-virtualbox --version     # Should be 7.0+
-git --version           # Should be 2.40+
-docker --version        # For Part 3 only, 20.10+
-kubectl version --client # Will install automatically in Part 1
-```
+**VirtualBox** (Hypervisor - VM software)
+- **What:** Software that runs VMs
+- **Why:** Free, cross-platform, integrates with Vagrant
+- **Check installation:** `virtualbox --version` (need 7.0+)
 
-### System Requirements
+**Git** (Version control)
+- **What:** Tracks changes to files
+- **Why:** Track infrastructure and application code
+- **Check installation:** `git --version` (need 2.40+)
 
-- **CPU:** At least 4 cores (8 recommended for comfortable development)
-- **RAM:** 8GB minimum (16GB recommended)
-- **Disk:** 50GB free space (VMs and Docker images take space)
-- **Network:** Stable internet connection (downloads are large)
+**Docker** (Container runtime)
+- **What:** Builds and runs containers
+- **Why:** Part 3 uses K3d which requires Docker
+- **Check installation:** `docker --version` (need 20.10+)
 
-### Installation Check
-
-If you're missing any tools:
-
-```bash
-# macOS
-brew install vagrant virtualbox
-
-# Ubuntu/Debian
-sudo apt-get install vagrant virtualbox git
-
-# Windows
-# Download from official websites, or use Chocolatey:
-# choco install vagrant virtualbox git
-```
+**kubectl** (Kubernetes CLI)
+- **What:** Command-line tool to interact with Kubernetes
+- **Why:** Deploy and manage applications
+- **Check installation:** `kubectl version --client` (automatic for Part 1)
 
 ---
 
 ## Part 1: Building Your First Multi-Node K3s Cluster
 
-### The Vision
+### What We're Building
 
-Imagine you're a DevOps engineer in 2010. Your company has physical servers in a data center. You need to:
-- Install an operating system on two servers
-- Set up networking between them
-- Install Kubernetes on both
-- Make them communicate
+**Goal:** Create two virtual machines that communicate with each other and form a Kubernetes cluster.
 
-**In 2010:** You'd do this manually, it would take days, and it would break if you touched it.
+**Architecture:**
+```
+┌─────────────────────────────────────────────┐
+│           Host Machine (Your Computer)      │
+│                                             │
+│  ┌────────────────────────────────────┐   │
+│  │  VirtualBox (VM Software)          │   │
+│  │                                    │   │
+│  │  ┌──────────────────────────────┐ │   │
+│  │  │  VM 1: macauchyS (Server)    │ │   │
+│  │  │  - IP: 192.168.56.110        │ │   │
+│  │  │  - K3s: Control Plane        │ │   │
+│  │  └──────────────────────────────┘ │   │
+│  │                                    │   │
+│  │  ┌──────────────────────────────┐ │   │
+│  │  │  VM 2: macauchySW (Worker)   │ │   │
+│  │  │  - IP: 192.168.56.111        │ │   │
+│  │  │  - K3s: Worker Node          │ │   │
+│  │  └──────────────────────────────┘ │   │
+│  └────────────────────────────────────┘   │
+│                                             │
+│  Both VMs connected via private network    │
+│  (192.168.56.x)                            │
+└─────────────────────────────────────────────┘
+```
 
-**In 2024:** You write code that does this automatically, reproducibly, and reliably.
+### Understanding Vagrant: Infrastructure as Code
 
-Welcome to Part 1.
+**What is Vagrant?**
+- Tool that automates VM creation
+- Instead of clicking VirtualBox buttons, you write code
+- `vagrant up` creates all VMs with proper configuration
 
-### Understanding Vagrant
+**Why Use Vagrant?**
+- **Reproducibility:** Run same file 100 times, get identical VMs
+- **Version Control:** Vagrantfile goes in Git
+- **Documentation:** Vagrantfile documents infrastructure
+- **Simplicity:** Complex setup becomes single command
 
-Vagrant is a tool that automates VM creation. Instead of clicking buttons in VirtualBox, you write a Vagrantfile that describes your VMs, and Vagrant creates them.
+**Without Vagrant (old way):**
+1. Open VirtualBox
+2. Click "Create VM"
+3. Select OS image
+4. Configure memory, CPU
+5. Configure networking
+6. Boot VM
+7. SSH and run setup scripts
+8. Repeat for second VM
+9. Fix networking issues
+10. Try to remember what you did
 
-**Why is this important?**
-- **Reproducibility:** Another person runs the same file, gets identical VMs
-- **Version control:** Your infrastructure is in Git
-- **Documentation:** The Vagrantfile documents your setup
-- **Simplicity:** No manual clicking, no missed steps
+**With Vagrant (new way):**
+```bash
+vagrant up
+# Done in 5 minutes, fully automated and repeatable
+```
 
-### The Vagrantfile: Breaking It Down
+### The Vagrantfile: Part by Part
 
-Here's what we'll create:
+**What is a Vagrantfile?**
+- Ruby script describing VMs
+- Read by Vagrant to create infrastructure
+- Goes in root of project directory
+
+**Why Ruby?**
+- Simple syntax
+- Can contain logic (loops, conditionals)
+- Mature language with good tooling
 
 ```ruby
 # p1/Vagrantfile
 Vagrant.configure("2") do |config|
-  # Global settings
-  config.vm.box = "almalinux/9"  # Base OS image
+  # "2" means Vagrant API version 2 (current stable)
+  # |config| is the object you configure
+
+  config.vm.box = "almalinux/9"
+  # Which OS to use. "almalinux/9" is AlmaLinux 9
+  # Vagrant downloads this from Vagrant Cloud automatically
+
   config.vm.provider "virtualbox"
-  config.vm.boot_timeout = 600   # 10 minutes
-  config.vm.synced_folder ".", "/vagrant", disabled: true  # No shared folder
+  # Use VirtualBox as the hypervisor (not Hyper-V, VMware, etc.)
 
-  # Variables for easy configuration
-  LOGIN = "macauchy"
-  SERVER_IP = "192.168.56.110"
-  WORKER_IP = "192.168.56.111"
+  config.vm.boot_timeout = 600
+  # Wait 10 minutes for VM to boot (nested virt is slow)
 
-  # First machine: K3s Server (control plane)
-  config.vm.define "#{LOGIN}S" do |server|
-    server.vm.hostname = "#{LOGIN}S"
-    server.vm.network "private_network", ip: "#{SERVER_IP}"
+  config.vm.synced_folder ".", "/vagrant", disabled: true
+  # Don't sync host folder to VM
+  # Why disabled? AlmaLinux doesn't have VirtualBox Guest Additions
+  # which would be needed for synced folders
+```
 
-    server.vm.provider "virtualbox" do |vb|
-      vb.memory = "2048"
-      vb.cpus = 2
-      vb.name = "#{LOGIN}S"
-    end
+**Defining the Server VM:**
 
-    server.vm.provision "shell", path: "scripts/setup_server.sh"
+```ruby
+LOGIN = "macauchy"  # Your username
+SERVER_IP = "192.168.56.110"  # Fixed IP for server
+WORKER_IP = "192.168.56.111"  # Fixed IP for worker
+
+config.vm.define "#{LOGIN}S" do |server|
+  # Define a VM named "macauchyS" (LOGIN + "S" for Server)
+
+  server.vm.hostname = "#{LOGIN}S"
+  # Set the hostname inside the VM to "macauchyS"
+
+  server.vm.network "private_network", ip: "#{SERVER_IP}"
+  # Create a private network (192.168.56.x range)
+  # Assign this VM IP 192.168.56.110
+  # This is how VMs communicate with each other and host
+
+  server.vm.provider "virtualbox" do |vb|
+    vb.memory = "2048"  # 2GB RAM
+    vb.cpus = 2         # 2 CPU cores
+    vb.name = "#{LOGIN}S"  # VirtualBox VM name (in GUI)
   end
 
-  # Second machine: K3s Worker (agent)
-  config.vm.define "#{LOGIN}SW" do |worker|
-    worker.vm.hostname = "#{LOGIN}SW"
-    worker.vm.network "private_network", ip: "#{WORKER_IP}"
-
-    worker.vm.provider "virtualbox" do |vb|
-      vb.memory = "2048"
-      vb.cpus = 2
-      vb.name = "#{LOGIN}SW"
-    end
-
-    worker.vm.provision "shell", path: "scripts/setup_worker.sh"
-  end
+  server.vm.provision "shell", path: "scripts/setup_server.sh"
+  # After VM boots, run this script to install K3s
 end
 ```
 
-### Breaking Down the Configuration
+**Why These Specific IPs?**
 
-**`config.vm.box = "almalinux/9"`**
-- This specifies the base image (operating system)
-- AlmaLinux is a Rocky Linux clone, free and stable
-- Vagrant downloads it from Vagrant Cloud the first time
+The IP range `192.168.56.0/24` is special:
+- RFC 1918 designated private IP range
+- Used by VirtualBox's default isolated network
+- Means: Host can access VMs, VMs can access each other
+- Host IP is 192.168.56.1, server gets 110, worker gets 111
 
-**`config.vm.network "private_network", ip: "192.168.56.x"`**
-- Creates a private network between VMs
-- IP range `192.168.56.0/24` is designated for private networks (RFC 1918)
-- VMs can talk to each other on this network
-- Host can also access this network
+**Why Two Separate Machines?**
 
-**`config.vm.synced_folder ".", "/vagrant", disabled: true`**
-- By default, Vagrant shares your host directory in VMs
-- This requires Guest Additions (hard on AlmaLinux)
-- We disable it; instead, we'll use HTTP to share the K3s token
+This teaches you multi-node Kubernetes:
+- Real K8s has multiple nodes
+- You learn about networking, distributed systems
+- Part 2 simplifies to single-node to focus on apps
 
-**`server.vm.provision "shell", path: "scripts/setup_server.sh"`**
-- Runs a bash script after VM boots
-- This is where we install K3s
+### K3s Installation Deep Dive
 
-### The K3s Installation Script
+**What is K3s?**
+- **K3s** = Kubernetes (K + 8 letters + s) lightweight version
+- Full Kubernetes but with some advanced features removed
+- Perfect for learning and edge computing
 
-Now the critical part: actually installing Kubernetes!
+**Why K3s and not Full Kubernetes?**
+- Full K8s: ~500 MB, complex, requires lots of resources
+- K3s: ~100 MB, simple, runs on anything
+- Both use identical kubectl commands
+- Easier to learn, same concepts
+
+**The Installation Script:**
 
 ```bash
 #!/bin/bash
-set -e  # Exit immediately if any command fails
+set -e  # Exit on any error
 
 echo "=== Installing K3s Server ==="
 
-# The magic line: K3s installer script from the internet
+# The K3s installation happens in one line:
 curl -sfL https://get.k3s.io | \
-  INSTALL_K3S_EXEC="--node-ip=192.168.56.110 \
-                    --advertise-address=192.168.56.110 \
-                    --flannel-iface=eth1" sh -
+  INSTALL_K3S_EXEC="\
+    --node-ip=192.168.56.110 \
+    --advertise-address=192.168.56.110 \
+    --flannel-iface=eth1" sh -
+```
 
-echo "=== K3s Server installed, waiting for token ==="
+**What happens here? (Step by step)**
 
-# Wait for the node token file to be created
+1. `curl -sfL https://get.k3s.io`
+   - Downloads K3s installer script from internet
+   - `-s` = silent, `-f` = fail on error, `-L` = follow redirects
+
+2. `| sh -`
+   - Pipes directly to bash (executes the script)
+   - This is how K3s distribution works
+
+3. Environment variables:
+   - `INSTALL_K3S_EXEC="--node-ip=192.168.56.110"`
+   - Tells K3s to listen on the private network IP
+   - Without this, K3s might bind to localhost (unreachable from other VMs)
+
+4. `--advertise-address=192.168.56.110`
+   - When other nodes connect, this is the IP they use
+   - Must match the IP they can reach (the private network)
+
+5. `--flannel-iface=eth1`
+   - Flannel is K3s's default network plugin
+   - `eth1` is the private network interface
+   - Without this, Flannel might use the wrong interface
+
+**Why is this complex?**
+
+Modern systems have multiple network interfaces:
+- `lo` (localhost, only VM itself)
+- `eth0` (NAT, VM to host)
+- `eth1` (private network, VM to VM)
+
+Kubernetes needs to know which interface to use. You must tell it.
+
+### The Token Sharing Mechanism
+
+**Problem:** Worker needs to authenticate with server. How do we pass credentials?
+
+**Traditional approach:** Shared NFS folder
+- Simple but requires Guest Additions (hard on AlmaLinux)
+
+**Our approach:** HTTP server
+- Clever and requires no special setup
+
+```bash
+# Server creates token file
 TOKEN_FILE="/var/lib/rancher/k3s/server/node-token"
+
+# Wait for it to exist
 while [ ! -f "$TOKEN_FILE" ]; do
-  echo "Waiting for k3s server to generate node token..."
+  echo "Waiting for token..."
   sleep 2
 done
 
-echo "=== Token generated, starting token server ==="
-
-# Create a temporary directory and copy the token there
+# Create temp directory and copy token there
 TOKEN_DIR=$(mktemp -d)
 cp "$TOKEN_FILE" "$TOKEN_DIR/node-token"
 cd "$TOKEN_DIR"
 
-# Start a simple HTTP server to share the token
-# This is genius: we don't need NFS or shared folders!
-nohup python3 -m http.server 8080 --bind 192.168.56.110 > /var/log/token-server.log 2>&1 &
-echo "Token server started on http://192.168.56.110:8080/node-token"
+# Start Python HTTP server
+nohup python3 -m http.server 8080 --bind 192.168.56.110 &
 
-# Auto-cleanup after 10 minutes
-(sleep 600 && pkill -f "http.server 8080" 2>/dev/null) &
-
-echo "=== K3s Server setup complete ==="
+# Clean up after 10 minutes
+(sleep 600 && pkill -f "http.server 8080") &
 ```
 
-### Understanding This Script
-
-**`curl -sfL https://get.k3s.io | sh -`**
-- Downloads K3s installer from the internet
-- Pipes it directly to bash (this is how K3s is designed)
-- It's convenient but means you trust the script (best practice: review first!)
+**How worker gets the token:**
 
 ```bash
-# In production, you'd do:
-curl -sfL https://get.k3s.io > /tmp/install-k3s.sh
-# Review the script:
-cat /tmp/install-k3s.sh | less
-# Then run it:
-bash /tmp/install-k3s.sh
-```
+# Worker script
+TOKEN=$(curl -sf "http://192.168.56.110:8080/node-token")
 
-**`--node-ip=192.168.56.110 --advertise-address=192.168.56.110`**
-- K3s listens on `192.168.56.110` (the private network)
-- Without this, it might bind to `localhost` or the wrong interface
-- The worker node connects to this IP
-
-**`--flannel-iface=eth1`**
-- Flannel is K3s's default network plugin (CNI)
-- `eth1` is the private network interface
-- Without this, Flannel might use the wrong interface and cluster communication fails
-
-**The Token Sharing Mechanism**
-This is clever and worth understanding:
-
-```
-K3s Server generates: /var/lib/rancher/k3s/server/node-token
-                              ↓
-        We copy it to temp directory
-                              ↓
-        We start: python3 -m http.server 8080
-                              ↓
-        Worker Node fetches: curl http://192.168.56.110:8080/node-token
-                              ↓
-        Worker uses token to authenticate and join cluster
-```
-
-Why this approach?
-- Vagrant by default uses VirtualBox shared folders
-- VirtualBox shared folders require Guest Additions
-- Guest Additions are hard to install on some Linux distros
-- HTTP server is built-in to Python (no dependencies)
-- Token server runs for 10 minutes (enough time for worker to boot and get it)
-
-### The Worker Setup Script
-
-```bash
-#!/bin/bash
-set -e
-
-echo "=== Setting up K3s Worker ==="
-
-SERVER_IP="192.168.56.110"
-TOKEN=""
-MAX_RETRIES=60
-
-echo "Waiting for K3s server token..."
-# Retry logic: the server might not be ready yet
-for i in $(seq 1 $MAX_RETRIES); do
-    TOKEN=$(curl -sf "http://${SERVER_IP}:8080/node-token" 2>/dev/null || true)
-    if [ -n "$TOKEN" ]; then
-        echo "Token received!"
-        break
-    fi
-    echo "Attempt $i/$MAX_RETRIES - waiting for server..."
-    sleep 5
-done
-
-if [ -z "$TOKEN" ]; then
-    echo "ERROR: Failed to get token from server"
-    exit 1
-fi
-
-echo "=== Token received, installing K3s Agent ==="
-
-# Install K3s in agent (worker) mode
+# Use token to join cluster
 curl -sfL https://get.k3s.io | \
   K3S_URL=https://192.168.56.110:6443 \
   K3S_TOKEN=$TOKEN \
-  INSTALL_K3S_EXEC="--node-ip=192.168.56.111 \
-                    --flannel-iface=eth1" sh -
-
-echo "=== K3s Worker setup complete ==="
+  INSTALL_K3S_EXEC="--node-ip=192.168.56.111" sh -
 ```
 
-### Key Differences from Server Script
+**Why this works:**
+- `K3S_URL=https://192.168.56.110:6443` = where to find the server
+- `K3S_TOKEN=$TOKEN` = authentication credentials
+- Server is already running, token server is active
+- Worker downloads K3s and joins the cluster
 
-**`K3S_URL=https://192.168.56.110:6443`**
-- Points the worker to the server's API
-- Port 6443 is the standard K3s API server port
-- HTTPS (the token is used for authentication)
+**Why auto-cleanup after 10 minutes?**
+- Token server is a security risk (exposes credentials)
+- Worker should get token quickly
+- 10 minutes is plenty of time for worker to boot and fetch
+- After that, server doesn't need the token server anymore
 
-**`K3S_TOKEN=$TOKEN`**
-- Authenticates the worker to the server
-- Token comes from the server's token file
-- This is how the worker proves it's allowed to join
-
-**Retry Logic (60 attempts, 5-second intervals)**
-- Worker boots before server is ready
-- Tries to get token, fails (server not ready yet)
-- Retries every 5 seconds
-- 60 retries × 5 seconds = 5 minutes of waiting
-- Plenty of time for server to be ready and token server to start
-
-### Running Part 1
+### Running Part 1: Step by Step
 
 ```bash
 cd p1
 
-# Create and provision both VMs
+# 1. Create both VMs and provision them
 vagrant up
 
 # This will:
-# 1. Download AlmaLinux 9 image (~1 GB, first time only)
-# 2. Create two VirtualBox VMs
-# 3. Boot both VMs
-# 4. Run setup_server.sh on server
-# 5. Run setup_worker.sh on worker
+# - Download AlmaLinux 9 image (1GB, first time only)
+# - Create VM named "macauchyS" with 2GB RAM, 2 CPUs
+# - Create VM named "macauchySW" with 2GB RAM, 2 CPUs
+# - Boot both VMs
+# - Run setup_server.sh on server
+# - Run setup_worker.sh on worker
+# - Worker will retry 60 times to get token from server
+# - Both will install K3s and join cluster
 # Takes 3-5 minutes first time
 
-# SSH into the server
+# 2. Check status
+vagrant status
+# Should show both VMs running
+
+# 3. SSH into server
 vagrant ssh macauchyS
 
-# Inside the server VM:
+# 4. Inside the VM, check Kubernetes
 kubectl get nodes
 
-# Output should show:
-# NAME                    STATUS   ROLES                  AGE   VERSION
-# macauchyS               Ready    control-plane,master   20s   v1.31.5+k3s1
-# macauchySW              Ready    <none>                 5s    v1.31.5+k3s1
+# Output should be:
+# NAME        STATUS   ROLES              AGE   VERSION
+# macauchyS   Ready    control-plane      30s   v1.31.5+k3s1
+# macauchySW  Ready    <none>             15s   v1.31.5+k3s1
 
-# Excellent! Both nodes are Ready!
+# Both Ready = cluster is healthy!
 
-# Check the kubeconfig was created
-cat k3s.yaml
+# 5. Check the kubeconfig (authentication credentials)
+cat /etc/rancher/k3s/k3s.yaml
 
-# Test outside the VM (from your host)
-export KUBECONFIG=$PWD/k3s.yaml
+# 6. Exit the VM
+exit
+
+# 7. On your host, access the cluster using kubeconfig
+export KUBECONFIG=$PWD/p1/k3s.yaml
 kubectl get nodes
 
-# Should show the same nodes
+# Should show the same nodes from your host!
 ```
+
+### Crucial Concepts Explained
+
+**What is kubeconfig?**
+- Configuration file telling kubectl where the cluster is
+- Contains:
+  - Server address (https://192.168.56.110:6443)
+  - Client certificates (authentication)
+  - Context settings
+- Without it, kubectl doesn't know which cluster to talk to
+
+**What is a node?**
+- A machine (VM or physical) in the cluster
+- Can be control plane (manager) or worker (runs apps)
+- macauchyS is control plane (has roles: control-plane, master)
+- macauchySW is worker (no roles, just runs containers)
+
+**What is a control plane?**
+- Machines that manage the cluster
+- Run API server (what kubectl talks to)
+- Run scheduler (decides where to run pods)
+- Run controllers (fix things when they break)
+- Usually 1-3 nodes for high availability
+
+**What are workers?**
+- Machines that run your applications
+- Listen to control plane
+- Run containers
+- Can be scaled up/down
 
 ### Common Pitfalls in Part 1
 
-**Pitfall 1: "Worker node stuck in NotReady"**
-
-This usually means networking is broken. Check:
+**Issue 1: Worker stuck in "NotReady"**
 
 ```bash
-# SSH into worker
+# Inside worker VM:
 vagrant ssh macauchySW
 
-# Can you reach the server?
+# Check if it's still trying to get token
+ps aux | grep curl
+
+# Check networking
 ping 192.168.56.110
+# If this fails, networking is broken
 
-# Can you reach the token server?
-curl http://192.168.56.110:8080/node-token
+# Check the logs
+journalctl -u k3s-agent -n 50 --no-pager
 
-# Check Flannel status
-kubectl logs -n kube-system -l k8s-app=flannel
-
-# The token server only runs for 10 minutes!
-# If worker takes longer to boot, you need to wait or restart
-
-# To manually get the token (if server is still running):
-# SSH to server and:
-cat /var/lib/rancher/k3s/server/node-token
+# Common causes:
+# 1. Server not ready yet (wait a bit longer)
+# 2. Token server not running (check server VM)
+# 3. Network not configured (Vagrant issue)
+# 4. Token server already stopped (after 10 minutes)
 ```
 
-**Pitfall 2: "Vagrant up hangs during provisioning"**
+**Solution:** If stuck, restart the worker:
+```bash
+vagrant reload macauchySW
+# This will reboot the VM and try again
+```
+
+**Issue 2: Vagrant up hangs**
 
 ```bash
-# If it hangs on "Running scripts":
-
-# In another terminal, SSH and check what's happening:
+# If it hangs on "Running scripts", check what's happening
 vagrant ssh macauchyS
 
-# Check if K3s is installing (takes several minutes)
-ps aux | grep -i k3s
-tail -f /tmp/install-k3s.log
+# See if K3s is still installing
+ps aux | grep k3s
+tail /var/log/k3s-install.log
 
-# K3s downloads are slow on slow connections
-# Be patient, it's downloading container images
+# K3s downloads are slow (pulling container images)
+# On slow internet, this can take 5-10 minutes
+# Be patient!
 ```
 
-**Pitfall 3: "kubeconfig has wrong IP"**
-
-The kubeconfig file (`p1/k3s.yaml`) might have `localhost` instead of `192.168.56.110`.
+**Issue 3: kubeconfig has wrong IP**
 
 ```bash
-# Edit it:
+# If kubeconfig says "server: https://127.0.0.1:6443"
+# But you're on a different machine, it won't work
+
+# Fix it:
 sed -i 's/127.0.0.1/192.168.56.110/g' p1/k3s.yaml
 
-# Or from host, manually edit the server field:
-# server: https://192.168.56.110:6443
+# Or manually edit:
+vim p1/k3s.yaml
+# Change: server: https://127.0.0.1:6443
+# To: server: https://192.168.56.110:6443
 ```
-
-### Part 1 Summary
-
-**What you've accomplished:**
-- ✅ Created a Vagrantfile from scratch
-- ✅ Automated VM provisioning
-- ✅ Installed K3s on two nodes
-- ✅ Established multi-node networking
-- ✅ Created a working Kubernetes cluster
-
-**Key learnings:**
-- Vagrant describes infrastructure as code
-- K3s is lightweight Kubernetes (perfect for learning)
-- Multi-node clusters need proper networking
-- Bash scripts automate complex deployments
-- Version control makes infrastructure reproducible
-
-**Reflection:**
-
-When I first ran `vagrant up`, I didn't realize how much was happening. The script:
-1. Downloaded a 1GB OS image
-2. Created two separate VirtualBox VMs
-3. Booted both simultaneously
-4. Ran provisioning scripts
-5. Coordinated network setup
-6. Installed Kubernetes on both
-7. Made them join into a cluster
-
-All from a 50-line Vagrantfile. This is the power of infrastructure automation. What used to take a team a full day now takes 5 minutes. And it's reproducible—you can destroy and rebuild it 100 times identically.
 
 ---
 
 ## Part 2: Running Applications on Kubernetes
 
-### The New Challenge
+### What We're Building
 
-Part 1 taught you how to *build* Kubernetes. Part 2 teaches you how to *use* it.
+**Goal:** Single K3s cluster running 3 different web applications, accessible by hostname.
 
-Now you have a blank Kubernetes cluster. Powerful, but empty. In Part 2, we'll:
-1. Create a single-node Kubernetes cluster (simpler than Part 1)
-2. Deploy three applications to it
-3. Route traffic to them based on hostnames
-4. Demonstrate scaling
-
-### Why Single-Node in Part 2?
-
-Good question! Part 1 demonstrates clustering. Part 2 demonstrates **application deployment and routing**. For that, complexity is a distraction. Single-node clusters are simpler and sufficient for learning.
-
-### The Vagrantfile for Part 2
-
-```ruby
-# p2/Vagrantfile
-Vagrant.configure("2") do |config|
-    config.vm.box = "almalinux/9"
-    config.vm.provider "virtualbox"
-    config.vm.boot_timeout = 600
-
-    LOGIN = "macauchy"
-    SERVER_IP = "192.168.56.110"
-
-    config.vm.define "#{LOGIN}S" do |server|
-        server.vm.hostname = "#{LOGIN}S"
-        server.vm.network "private_network", ip: "#{SERVER_IP}"
-
-        server.vm.provider "virtualbox" do |vb|
-            vb.name = "#{LOGIN}S"
-            vb.memory = "4096"  # ← More RAM for apps
-            vb.cpus = 2
-
-            # VirtualBox 7 nested virtualization fixes
-            vb.customize ["modifyvm", :id, "--nested-hw-virt", "on"]
-            vb.customize ["modifyvm", :id, "--nestedpaging", "off"]
-            vb.customize ["modifyvm", :id, "--paravirtprovider", "kvm"]
-        end
-
-        server.vm.provision "shell", path: "scripts/setup_server.sh"
-    end
-end
+**The Concept:**
+```
+User requests → 192.168.56.110 (host: app1.com)
+               ↓
+         Ingress Controller (Traefik)
+               ↓
+         "app1.com → send to app-one-svc"
+               ↓
+         Service app-one-svc
+               ↓
+         Pod with "app: app-one" label
+               ↓
+         Container responding with "Hello from App One"
 ```
 
-### VirtualBox 7 Workarounds Explained
+### Single-Node vs Multi-Node: Why the Change?
 
-If you're using VirtualBox 7, you might see crashes. These options prevent them:
+**Part 1:** Two-node cluster
+- Teaches networking, clustering, multi-node concepts
+- More complex setup
+- Demonstrates real production patterns
 
-**`--nested-hw-virt on`**
-- Enables nested virtualization
-- Allows VMs to run containers efficiently
+**Part 2:** Single-node cluster
+- Focuses on application deployment
+- Simpler to understand
+- Still demonstrates Kubernetes concepts
+- K3s handles everything on one machine
 
-**`--nestedpaging off`**
-- Nested paging can cause assertion failures in VirtualBox 7
-- Disabling it sacrifices some performance for stability
+**Real-world:** Most dev environments use single-node (easier). Production uses multi-node (reliability).
 
-**`--paravirtprovider kvm`**
-- Uses KVM paravirtualization (more stable than default)
-- Gives better performance than Hyper-V
+### Kubernetes Manifests: The YAML Files
 
-### The Setup Script
+**What is a manifest?**
+- YAML file describing Kubernetes resources
+- Declarative (you describe desired state, K8s achieves it)
+- Version-controlled (lives in Git)
+- Self-documenting
 
-```bash
-#!/bin/bash
-set -e
+**Why YAML?**
+- Human-readable
+- Less verbose than JSON
+- Supports comments
+- Standard in Kubernetes ecosystem
 
-echo "=== Installing K3s Server ==="
-curl -sfL https://get.k3s.io | sh -
-# Simple! Single node doesn't need special networking options
-```
-
-Notice this is *much* simpler than Part 1. We don't need:
-- Custom IP binding
-- Flannel interface specification
-- Token servers
-- Worker setup
-
-Single-node cluster defaults work fine.
-
-### Kubernetes Manifests: Deployments
-
-Now for the applications. In Kubernetes, you describe what you want with YAML files.
+### Deployments: Managing Replicas
 
 ```yaml
-# p2/confs/apps.yaml - Deployment for App One
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: app-one
 spec:
-  replicas: 1  # Run one copy of this app
+  replicas: 1
+  # ↑ "Always run exactly 1 copy of this app"
+  # If pod crashes, K8s restarts it
+  # If you change to 3, K8s creates 2 more
+
   selector:
     matchLabels:
       app: app-one
+  # ↑ Deployment finds pods with label "app: app-one"
+  # This is how deployment knows which pods are its
+
   template:
     metadata:
       labels:
         app: app-one
+    # ↑ New pods get this label
+    # Deployment will find them via selector above
+
     spec:
       containers:
       - name: app-one
         image: hashicorp/http-echo
+        # Image to run (from Docker Hub)
+
         args: ["-text=Hello from App One"]
+        # Arguments passed to the container
+        # This specific image echoes the text
+
         ports: [{ containerPort: 5678 }]
+        # Container listens on this port inside pod
 ```
 
-### Understanding Deployments
+**What Happens When You Apply This:**
 
-**`apiVersion: apps/v1`**
-- This is the stable, production version of the Deployment API
+```bash
+kubectl apply -f deployment.yaml
 
-**`kind: Deployment`**
-- We're describing a Deployment (not a Pod, StatefulSet, etc.)
+# K8s creates:
+# 1. ReplicaSet (manages replicas)
+# 2. Pod (running container)
+# 3. Labels for tracking
 
-**`metadata.name: app-one`**
-- Name of this deployment (how you reference it)
+# K8s promises:
+# - "Always 1 replica"
+# - If pod crashes, create new one
+# - If node dies, recreate pod elsewhere
+# - If you scale to 3, create 2 more immediately
 
-**`spec.replicas: 1`**
-- How many copies of this app to run
-- Change to 3, Kubernetes creates 3 copies
-- If a pod dies, Kubernetes recreates it
+# This is self-healing!
+```
 
-**`selector.matchLabels`**
-- How Kubernetes finds which pods belong to this deployment
-- Matches pods with label `app: app-one`
+### Services: Stable Endpoints
 
-**`template.spec.containers`**
-- This is what the actual pod looks like
-- Image: `hashicorp/http-echo` (a simple HTTP server)
-- It echoes back the text you specify
+**Problem:** Pods die and respawn with new IPs. How do you access them reliably?
 
-**`args: ["-text=Hello from App One"]`**
-- Arguments passed to the container
-- This specific image echoes "Hello from App One"
-
-### Kubernetes Manifests: Services
+**Answer:** Services provide a stable endpoint that load-balances to live pods.
 
 ```yaml
-# Service for App One
 apiVersion: v1
 kind: Service
 metadata:
   name: app-one-svc
 spec:
   selector:
-    app: app-one  # Route to pods with this label
-  ports: [{ port: 80, targetPort: 5678 }]
-    # External: port 80
-    # Container: port 5678
+    app: app-one
+  # ↑ Forward traffic to pods with label "app: app-one"
+
+  ports:
+  - port: 80
+    targetPort: 5678
+  # ↑ Service port 80 → Container port 5678
+
+  type: ClusterIP
+  # Default type (internal to cluster)
 ```
 
-### Understanding Services
+**How It Works:**
 
-In Kubernetes, pods are ephemeral (they die and respawn). How do you access them?
+```
+Client → Service IP:80
+          ↓ (service load-balances)
+          Pod 1:5678 (if alive)
+          Pod 2:5678 (if alive)
+          Pod 3:5678 (if alive)
 
-**Answer: Services**
+Service automatically:
+- Discovers which pods are healthy
+- Load-balances across them
+- Updates if pods are added/removed
+```
 
-A Service is:
-1. A stable network endpoint
-2. A load balancer for multiple pod replicas
-3. A DNS name (e.g., `app-one-svc`)
+**Service DNS:**
+Within the cluster, you can access by name:
+```bash
+# From inside a pod:
+curl http://app-one-svc:80
+# DNS resolves app-one-svc to service IP
+# Service load-balances to actual pods
+```
 
-**`selector: app: app-one`**
-- Routes traffic to pods with label `app: app-one`
-- Automatically load-balances across all replicas
+### Ingress: Routing External Traffic
 
-**`port: 80, targetPort: 5678`**
-- Clients connect to port 80
-- Service forwards to port 5678 (where the app listens)
+**Problem:** Services are cluster-internal. Users on the internet need to access apps.
 
-### Ingress: Routing Traffic by Hostname
-
-Services work within the cluster. But you want to access apps from outside. That's what Ingress does:
+**Solution:** Ingress routes external HTTP/HTTPS traffic to services.
 
 ```yaml
-# p2/confs/ingress.yaml
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: main-ingress
 spec:
-  ingressClassName: traefik  # K3s includes Traefik
+  ingressClassName: traefik
+  # K3s comes with Traefik (no installation needed!)
+
   rules:
   - host: app1.com
     http:
@@ -697,18 +1135,19 @@ spec:
           service:
             name: app-one-svc
             port: { number: 80 }
+  # ↑ If request Host: app1.com → send to app-one-svc
 
   - host: app2.com
     http:
       paths:
       - path: /
-          pathType: Prefix
-          backend:
-            service:
-              name: app-two-svc
-              port: { number: 80 }
+        pathType: Prefix
+        backend:
+          service:
+            name: app-two-svc
+            port: { number: 80 }
+  # ↑ If request Host: app2.com → send to app-two-svc
 
-  # Default: no host specified
   - http:
       paths:
       - path: /
@@ -717,71 +1156,71 @@ spec:
           service:
             name: app-three-svc
             port: { number: 80 }
+  # ↑ No host specified = catch-all default
+  # If Host doesn't match above, use this
 ```
 
-### Understanding Ingress
-
-Think of Ingress as a **reverse proxy configuration**:
+**Ingress Flow:**
 
 ```
-Internet Request to 192.168.56.110 with Host: app1.com
-          ↓
-    Ingress Controller (Traefik)
-          ↓
-    Rules: "if Host == app1.com → send to app-one-svc"
-          ↓
-    Service app-one-svc (load balancer)
-          ↓
-    Pod with app: app-one label
-          ↓
-    Application responds
+External Request to 192.168.56.110
+   ↓ (checks Host header)
+   ├─ Host: app1.com → app-one-svc
+   ├─ Host: app2.com → app-two-svc
+   └─ Other → app-three-svc
+   ↓ (service load-balances)
+   Pod responds
 ```
 
-**`ingressClassName: traefik`**
-- K3s comes with Traefik ingress controller built-in
-- No need to install it!
+### Traefik: What's Running Behind the Scenes
 
-**`- host: app1.com`**
-- If request has `Host: app1.com` header
-- Route to `app-one-svc`
+**What is Traefik?**
+- Reverse proxy and ingress controller
+- Built into K3s (no installation needed!)
+- Watches Ingress resources
+- Routes traffic based on rules
 
-**`- http: (no host specified)`**
-- Catch-all for any request that doesn't match above rules
-- Routes to `app-three-svc`
+**Why Traefik with K3s?**
+- Simple, built-in
+- Supports host-based routing
+- Low overhead
+- Perfect for learning
 
-### Deploying Applications
+**Professional context:** Other ingress controllers: Nginx, Istio, Kong. They all do similar things with different trade-offs.
+
+### Running Part 2
 
 ```bash
 cd p2
 
-# Start the VM
+# Create the VM
 vagrant up
 
-# SSH into the VM
+# This time:
+# - Single VM (simpler)
+# - More memory (4GB for apps)
+# - VirtualBox 7 fixes for nested virt
+
+# SSH and deploy
 vagrant ssh macauchyS
 
-# Export kubeconfig
+# Inside VM:
 export KUBECONFIG=/vagrant/k3s.yaml
 
-# Deploy applications
+# Apply application manifests
 kubectl apply -f /vagrant/confs/apps.yaml
 
-# Deploy ingress routing
+# Apply ingress rules
 kubectl apply -f /vagrant/confs/ingress.yaml
 
-# Verify everything is running
+# Verify everything
 kubectl get deployments
 kubectl get services
 kubectl get ingress
 
-# Test from your host machine
-# Add entries to /etc/hosts (or use curl with Host header)
-
+# Test from host:
 # Option 1: Edit /etc/hosts
-sudo vi /etc/hosts
-# Add:
-# 192.168.56.110 app1.com
-# 192.168.56.110 app2.com
+sudo bash -c 'echo "192.168.56.110 app1.com app2.com" >> /etc/hosts'
 
 # Then:
 curl http://app1.com
@@ -793,646 +1232,620 @@ curl http://app2.com
 curl http://192.168.56.110
 # Response: "Hello from App Three" (default route)
 
-# Option 2: Use curl with Host header (no need to edit /etc/hosts)
+# Option 2: Use curl Host header (no /etc/hosts edit)
 curl -H "Host: app1.com" http://192.168.56.110
-curl -H "Host: app2.com" http://192.168.56.110
 ```
 
 ### Understanding Scaling
 
-Remember when we set `replicas: 3` for app-two? Let's see it in action:
+**Replicas in Action:**
+
+```yaml
+kind: Deployment
+metadata:
+  name: app-two
+spec:
+  replicas: 3  # ← Run 3 copies
+```
 
 ```bash
-# App Two has 3 replicas
+# Check pods
 kubectl get pods -l app=app-two
-# Output:
-# NAME                        READY   STATUS    RESTARTS   AGE
-# app-two-xxx                 1/1     Running   0          10s
-# app-two-yyy                 1/1     Running   0          10s
-# app-two-zzz                 1/1     Running   0          10s
 
-# The service load-balances across all three
-# Make multiple requests:
+# Output:
+# NAME           READY   STATUS    RESTARTS   AGE
+# app-two-aaa    1/1     Running   0          10s
+# app-two-bbb    1/1     Running   0          10s
+# app-two-ccc    1/1     Running   0          10s
+
+# Service load-balances across all three
 for i in {1..6}; do
   curl -H "Host: app2.com" http://192.168.56.110
 done
+# Responses come from different pods
+# K8s distributes traffic
 
-# You'll see responses from different pods
-# Kubernetes is distributing traffic!
+# Kill a pod
+kubectl delete pod app-two-aaa
 
-# Try killing a pod:
-kubectl delete pod app-two-xxx
-
-# K8s automatically creates a replacement
+# K8s immediately creates replacement
 kubectl get pods -l app=app-two
-# Still 3 replicas! That's self-healing.
+# Still 3 pods!
+# This is self-healing
 
-# Want to scale up to 5 replicas?
+# Scale up to 5
 kubectl scale deployment app-two --replicas=5
 kubectl get pods -l app=app-two
 # Now 5 running!
+
+# Scale down to 2
+kubectl scale deployment app-two --replicas=2
+# K8s terminates 3 pods gracefully
 ```
 
-### Common Pitfalls in Part 2
+### What You've Learned in Part 2
 
-**Pitfall 1: "Service can't reach the pod"**
+**Deployments:**
+- Manage multiple pod copies
+- Self-healing (restart on crash)
+- Scalable (add/remove replicas)
+- Rolling updates (deploy new versions)
 
-Check the labels match:
+**Services:**
+- Stable endpoints for pods
+- Load-balancing across replicas
+- Service discovery via DNS
 
-```bash
-# Deployment spec has:
-# labels:
-#   app: app-one
+**Ingress:**
+- External traffic routing
+- Hostname-based routing (app1.com vs app2.com)
+- L7 (application layer) routing
 
-# Service spec has:
-# selector:
-#   app: app-one
-
-# If these don't match exactly, service can't find pods
-kubectl get pods --show-labels
-kubectl get svc app-one-svc -o yaml
-# Check if selector matches any pod labels
-```
-
-**Pitfall 2: "Ingress not routing traffic"**
-
-```bash
-# Check if ingress exists and has an IP
-kubectl get ingress
-
-# Should show:
-# NAME          CLASS     HOSTS          ADDRESS      PORTS
-# main-ingress  traefik   app1.com,...   10.42.0.1    80
-
-# If ADDRESS is empty, Traefik isn't ready
-kubectl get pods -n kube-system -l app=traefik
-
-# Check Traefik logs
-kubectl logs -n kube-system -l app=traefik
-```
-
-**Pitfall 3: "Port is wrong"**
-
-In your test:
-```bash
-# Container listens on 5678
-# Service exposes port 80
-# Ingress routes to service port 80
-
-# So traffic path is:
-# Browser → port 80 (Ingress)
-# Ingress → port 80 (Service)
-# Service → port 5678 (Container)
-
-# If any port is wrong, traffic can't flow
-kubectl get svc app-one-svc -o yaml
-# Check: containerPort and targetPort match the container
-```
-
-### Part 2 Reflection
-
-Part 1 felt like magic—you ran one command and suddenly had a Kubernetes cluster. Part 2 is different. Here, you're *using* Kubernetes.
-
-I spent the most time understanding why Services and Ingress are needed. The progression makes sense in retrospect:
-
-1. **Container** - Your application
-2. **Pod** - Container wrapped by Kubernetes
-3. **Deployment** - Manages multiple pods, scaling, updates
-4. **Service** - Network endpoint for accessing pods
-5. **Ingress** - External access to services
-
-Each layer solves a problem:
-- Deployment solves: "What if a pod crashes?"
-- Service solves: "How do I access pods that come and go?"
-- Ingress solves: "How do I route external traffic to the right service?"
-
-This layered approach is why Kubernetes is so powerful. Each component does one thing well.
+**Traefik:**
+- Ingress controller built into K3s
+- Watches Ingress resources
+- Dynamically updates routing
 
 ---
 
 ## Part 3: GitOps with Argo CD
 
-### The Reality of Deployments
+### The Reality of Manual Deployments
 
-Imagine you've deployed an app. Now you need to:
-- Update the image version
-- Change the number of replicas
-- Modify configuration
-- Roll back if something breaks
+**Current workflow (without GitOps):**
 
-**Traditional approach:**
 ```bash
-kubectl edit deployment app-one  # Edit in-place
-# or
-kubectl set image deployment/app-one app=new-image:v2
-# or
-kubectl scale deployment app-one --replicas=5
+# I want to update app to v2
+vim deployment.yaml
+# Change: image: app:v1 → v2
+
+# Now apply manually
+kubectl apply -f deployment.yaml
+
+# Questions that arise:
+# - What changed? (no history)
+# - Who changed it? (not tracked)
+# - When? (no audit trail)
+# - Why? (no commit message)
+# - How do I rollback? (no easy way)
+# - What if two people edit simultaneously? (merge conflict)
+# - How does this sync with dev, staging, prod? (manual work)
 ```
 
-Problems:
-- Changes aren't tracked (what changed? when? why?)
-- Not reproducible (did you document what you changed?)
-- Doesn't integrate with your development workflow
-- Hard to audit (who made changes?)
+**Problems:**
+- Not version-controlled
+- Not auditable
+- Error-prone (typos deploy to production)
+- Doesn't scale (manual per environment)
+- Hard to rollback (what was the previous version?)
 
-### Enter GitOps
+### What is GitOps?
 
-**GitOps principle:** Your Git repository is the source of truth.
+**Core Principle:** Git is the single source of truth for desired state.
 
 ```
-You push to Git
+You commit to Git
     ↓
-Argo CD detects change
+GitOps controller detects change
     ↓
-Argo CD applies manifests to cluster
+Controller applies manifests to cluster
     ↓
-Application is updated
+Cluster converges to desired state
     ↓
-Everything is tracked in Git
+Everything is auditable via Git
 ```
 
-Advantages:
-- ✅ Full audit trail
-- ✅ Easy rollback (git revert)
-- ✅ Reproducible (entire history in Git)
-- ✅ Integrates with your CI/CD
-- ✅ Self-documenting (commits explain changes)
+**Key Benefits:**
+- **Version control:** Every change in Git
+- **Auditability:** Who changed what when why
+- **Rollback:** `git revert` to previous state
+- **Reproducibility:** Git state = cluster state always
+- **Review process:** Pull requests before deployment
+- **Automation:** No manual kubectl apply
 
-### Why K3d Instead of Vagrant?
+### Argo CD: Implementing GitOps
 
-K3d is to K3s what Docker is to VirtualBox.
+**What is Argo CD?**
+- A Kubernetes controller that implements GitOps
+- Watches Git repository
+- Automatically applies manifests to cluster
+- Ensures cluster matches Git state
 
-**Vagrant (Part 1 & 2):**
-- Creates full VirtualBox VMs
-- Slower (full OS boot)
-- Heavier (more disk/RAM)
-- Better for learning multi-node
+**Why Argo CD?**
+- Purpose-built for GitOps
+- Excellent UI/API
+- Integrates with GitHub/GitLab
+- Handles complex deployments
+- Industry standard
 
-**K3d (Part 3):**
-- Runs K3s inside Docker containers
-- Faster (no OS boot)
-- Lighter (all containers share host OS)
-- Better for development/testing
+**Architecture:**
 
-For Part 3, we use K3d because:
-1. Faster iteration (spin up/down in seconds)
-2. Less resources (important for laptops)
-3. Docker is already on your system
-4. Demonstrates modern development workflows
+```
+┌─────────────────────────────────┐
+│   GitHub Repository             │
+│   (p3/confs/)                   │
+│   - deployment.yaml             │
+│   - service.yaml                │
+│   - kustomization.yaml          │
+└──────────────┬──────────────────┘
+               │ (watches)
+               ↓
+┌─────────────────────────────────┐
+│   Argo CD (argocd namespace)    │
+│                                 │
+│  argocd-repo-server:            │
+│  - Clones GitHub repo           │
+│  - Parses YAML                  │
+│  - Detects changes              │
+│                                 │
+│  argocd-application-controller: │
+│  - Watches Application CRD      │
+│  - Applies manifests            │
+│  - Syncs cluster to Git         │
+│                                 │
+│  argocd-server:                 │
+│  - Web UI/API                   │
+│  - Shows sync status            │
+└──────────────┬──────────────────┘
+               │ (applies to)
+               ↓
+┌─────────────────────────────────┐
+│   K3d Cluster                   │
+│   (dev namespace)               │
+│                                 │
+│   Deployment:                   │
+│   - 1 pod running app           │
+│   - Image matches Git           │
+│   - Replicas match Git          │
+└─────────────────────────────────┘
+```
+
+### K3d: Why We Switch to Docker
+
+**Part 1-2: Vagrant + VirtualBox**
+```
+Your computer
+  ↓
+VirtualBox software
+  ↓
+Full Linux VM (boots like real computer)
+  ↓
+K3s running in VM
+  ↓
+Your containers
+```
+
+**Complexity:** High (multiple abstraction layers)
+**Speed:** 3-5 minutes to boot
+**Resource use:** High (full OS per VM)
+
+**Part 3: K3d**
+```
+Your computer
+  ↓
+Docker
+  ↓
+K3s container (lightweight)
+  ↓
+Your containers
+```
+
+**Complexity:** Low (one abstraction layer)
+**Speed:** 10-30 seconds to boot
+**Resource use:** Low (shares host OS)
+
+**Why the switch?**
+- Part 3 focuses on GitOps (automation), not infrastructure
+- K3d is faster for development (iterate quicker)
+- Less resource usage (laptop battery life)
+- Same K3s, same kubectl commands
 
 ### Installing K3d
 
+**What K3d Does:**
+- Downloads K3s container image
+- Creates Docker containers (server + agents)
+- Sets up Docker networking
+- Configures kubeconfig
+
+**Installation:**
 ```bash
-# K3d installation is just downloading a binary
+# Download and install K3d binary
 curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
 
 # Verify
 k3d version
-# Output: k3d version v5.8.3 (latest version)
-```
+# Output: k3d version v5.8.3
 
-Incredibly simple! No dependencies, no compilation, just a binary.
-
-### Creating a K3d Cluster
-
-```bash
-# Create a cluster named "macauchy" with 3 nodes
+# Create a cluster
 k3d cluster create macauchy \
-  --servers 1 \        # 1 control plane
-  --agents 2 \         # 2 worker nodes
-  --port "80:80@loadbalancer" \      # Map port 80
-  --port "443:443@loadbalancer" \    # Map port 443
-  --api-port 6443 \                  # Kubernetes API port
-  --wait                             # Wait for cluster ready
+  --servers 1 \
+  --agents 2 \
+  --port "80:80@loadbalancer" \
+  --port "443:443@loadbalancer" \
+  --wait
 
-# K3d automatically:
-# - Pulls K3s Docker image
-# - Creates three Docker containers (1 server + 2 agents)
-# - Sets up networking between them
-# - Configures kubeconfig
+# What this does:
+# - 1 control plane server
+# - 2 worker agents
+# - Expose port 80 (HTTP)
+# - Expose port 443 (HTTPS)
+# - Wait for nodes to be ready
 
 # Verify
 kubectl get nodes
-# Shows three ready nodes
 
-# Delete when done
-k3d cluster delete macauchy
+# Should show:
+# k3d-macauchy-server-0   Ready   control-plane
+# k3d-macauchy-agent-0    Ready   <none>
+# k3d-macauchy-agent-1    Ready   <none>
 ```
 
-### Argo CD: Installation & Concepts
+### Argo CD Installation
 
-Argo CD is installed into the cluster via kubectl:
+**What Gets Installed:**
+- Custom Resource Definitions (Application, ApplicationSet)
+- Service accounts and RBAC
+- Controllers (application-controller, repo-server)
+- Web UI (argocd-server)
+- Cache/storage (redis)
+- Supporting services
 
 ```bash
-# Download and apply all Argo CD manifests
+# Create namespace for Argo CD
 kubectl create namespace argocd
-kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 
-# This creates:
-# - Custom Resource Definitions (CRDs)
-# - Service accounts and RBAC
-# - Deployments for each component
-# - Services
-# - ConfigMaps
+# Apply official Argo CD manifests
+kubectl apply -n argocd -f \
+  https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
 
 # Verify
 kubectl get pods -n argocd
+
+# Shows all Argo CD components running
 ```
 
-### Argo CD Architecture
+### The Application CRD: Core of GitOps
 
-```
-┌─────────────────────────────────────────┐
-│  Argo CD Components (argocd namespace)  │
-│                                         │
-│  ┌──────────────────────────────────┐  │
-│  │    argocd-server (Web UI/API)    │  │
-│  │    Port: 8080 (HTTP)             │  │
-│  └──────────────────────────────────┘  │
-│                                         │
-│  ┌──────────────────────────────────┐  │
-│  │  argocd-application-controller   │  │
-│  │  (Watches Git, syncs to cluster) │  │
-│  └──────────────────────────────────┘  │
-│                                         │
-│  ┌──────────────────────────────────┐  │
-│  │  argocd-repo-server              │  │
-│  │  (Clones and parses Git repos)   │  │
-│  └──────────────────────────────────┘  │
-│                                         │
-│  ┌──────────────────────────────────┐  │
-│  │  argocd-redis, dex-server, etc.  │  │
-│  └──────────────────────────────────┘  │
-└─────────────────────────────────────────┘
-                    ↓
-        ┌─────────────────────────────┐
-        │   Your Git Repository       │
-        │   (GitHub/GitLab/Gitea)     │
-        │                             │
-        │   Watches: p3/confs/        │
-        └─────────────────────────────┘
-                    ↓
-        ┌─────────────────────────────┐
-        │   Your Application          │
-        │   (in 'dev' namespace)      │
-        └─────────────────────────────┘
-```
+**What is a CRD?**
+- Custom Resource Definition
+- Extends Kubernetes with new resource types
+- Argo CD defines "Application" CRD
 
-### The Argo CD Application CRD
-
-An Application is a custom resource that tells Argo CD:
-- Where is your Git repo?
-- What path to watch?
-- Where to deploy?
-- How to sync?
-
+**Application Resource:**
 ```yaml
-# p3/confs/argocd-app.yaml
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: macauchy-app
   namespace: argocd
 spec:
-  # Define boundaries and access
-  project: default
-
   # Where to get manifests (Git source)
   source:
     repoURL: https://github.com/maxime-c16/inception_of_things.git
-    targetRevision: HEAD          # Main branch
-    path: p3/confs                # Watch this directory
+    # Which Git repo to watch
+
+    targetRevision: HEAD
+    # Which branch (HEAD = main branch)
+
+    path: p3/confs
+    # Which directory contains manifests
 
   # Where to deploy (Kubernetes destination)
   destination:
-    server: https://kubernetes.default.svc  # This cluster
-    namespace: dev                           # This namespace
+    server: https://kubernetes.default.svc
+    # This cluster (internal address)
+
+    namespace: dev
+    # Deploy to 'dev' namespace
 
   # How to sync
   syncPolicy:
     automated:
-      prune: true       # Delete resources removed from Git
-      selfHeal: true    # Revert manual cluster changes
+      prune: true
+      # Delete K8s objects if removed from Git
+
+      selfHeal: true
+      # Revert manual changes, always match Git
+
     syncOptions:
-    - CreateNamespace=true  # Create namespace if missing
+    - CreateNamespace=true
+    # Create namespace if it doesn't exist
 ```
 
 ### Understanding Sync Policy
 
-**`automated.prune: true`**
-- If you remove a file from Git
-- Argo CD deletes the corresponding Kubernetes resource
-- Keep cluster exactly matching Git
+**`prune: true`**
+```
+Git has:     deployment.yaml
+Cluster has: deployment.yaml, service.yaml
 
-**`automated.selfHeal: true`**
-- If someone manually changes the cluster
-- Argo CD detects the drift
-- Automatically corrects it to match Git
-- Git is always the truth
+Result: K8s deletes service.yaml
+Why:     If it's not in Git, it shouldn't exist in cluster
+```
 
-Example: Someone runs `kubectl delete pod app-xxx`:
-1. Pod is deleted
-2. Argo CD detects pod count is wrong
-3. Argo CD recreates the pod
-4. Cluster is back in sync with Git
+**`selfHeal: true`**
+```
+Git says: replicas: 3
+Someone runs: kubectl scale deployment app --replicas=1
 
-### The Complete GitOps Workflow
+Argo CD detects mismatch
+Argo CD corrects: replicas back to 3
 
+Why: Git is the source of truth, drift isn't allowed
+```
+
+**`CreateNamespace=true`**
+```
+Git manifest targets 'dev' namespace
+But 'dev' namespace doesn't exist
+
+Result: Argo CD creates the namespace automatically
+Why:    Reduces manual setup
+```
+
+### The GitOps Workflow
+
+**Step 1: Update Your Manifest**
+```yaml
+# p3/confs/deployment.yaml
+containers:
+- name: app
+  image: wil42/playground:v1  # ← Current
+
+# Change to:
+  image: wil42/playground:v2  # ← Updated
+```
+
+**Step 2: Commit and Push to Git**
 ```bash
-# Step 1: Update your manifest
-vim p3/confs/deployment.yaml
-# Change: image: wil42/playground:v1 → v2
-
-# Step 2: Commit and push
 git add p3/confs/deployment.yaml
 git commit -m "chore(p3): update app to v2"
 git push origin main
 
-# Step 3: Argo CD takes it from here
-# - argocd-repo-server clones the repo
-# - Detects the new image tag
-# - argocd-application-controller applies the manifest
-# - Kubernetes deletes old pod
-# - Kubernetes creates new pod with v2 image
-
-# No kubectl commands needed!
-# Everything is via Git
-
-# Step 4: Verify
-kubectl get pods -n dev
-# Shows new pod with v2
-
-# To rollback:
-git revert HEAD
-git push origin main
-# Argo CD automatically reverts to v1!
+# Commit message should explain WHY
+# Git history becomes operational history
 ```
 
-### Testing GitOps: The Satisfying Part
+**Step 3: Argo CD Detects Change**
+```
+GitHub receives your push
+Argo CD polls GitHub (or receives webhook)
+Argo CD detects: deployment.yaml changed
+Argo CD fetches new manifest
+Argo CD compares to cluster state
+Argo CD detects: image changed from v1 to v2
+```
 
-This is where you see the power:
+**Step 4: Automatic Sync**
+```
+Argo CD applies new manifest
+Kubernetes:
+  1. Detects image change
+  2. Creates new ReplicaSet with v2 image
+  3. Starts new pods with v2
+  4. Waits for them to be ready
+  5. Terminates old pods with v1
+  (This is a rolling update - no downtime!)
+```
+
+**Step 5: Verify in Argo CD UI**
+```bash
+# Port forward to Argo CD
+kubectl port-forward svc/argocd-server -n argocd 8080:443
+
+# Open: https://localhost:8080
+# Login: admin / <password from earlier>
+# See: macauchy-app synchronized
+# Shows: deployment, service, pods all in sync
+```
+
+### Testing GitOps: The Real Magic
 
 ```bash
-# Terminal 1: Watch Argo CD
+# Terminal 1: Watch Argo CD Application
 kubectl get application macauchy-app -n argocd -w
 
-# Terminal 2: Make a change in Git
+# Terminal 2: Watch pods
+kubectl get pods -n dev -w
+
+# Terminal 3: Make the change
 # Edit deployment.yaml: v1 → v2
 git add . && git commit -m "update to v2" && git push
 
-# Watch Terminal 1
-# Status changes from "Synced" to "OutOfSync" to "Synced" again
-# The pod automatically gets recreated!
+# Watch Terminal 1:
+# SYNC STATUS changes: Synced → OutOfSync → Synced
+# HEALTH: Progressing → Healthy
 
-# Terminal 3: Watch the pods
-kubectl get pods -n dev -w
-
-# When you push, a new pod gets created
+# Watch Terminal 2:
 # Old pod terminates
-# New pod with v2 image appears
+# New pod appears with v2 image
 
-# Test the app
+# Verify the app works:
 curl http://<service-ip>:8888/
 # Response: {"status":"ok", "message": "v2"}
 ```
 
-This is **DevOps magic**. You made a change in Git, and it automatically deployed to production. No manual steps, no scripts, just Git + Argo CD.
+This is the magic moment. You made a change in Git, pushed to GitHub, and the cluster automatically updated itself. No `kubectl apply`, no scripts, no manual work.
 
-### Common Pitfalls in Part 3
+### Advantages of GitOps
 
-**Pitfall 1: "Application stuck in OutOfSync"**
-
+**Compare: Traditional Deployment**
 ```bash
-# Check what's different
-kubectl describe application macauchy-app -n argocd
-
-# Check the repo server logs
-kubectl logs -n argocd deployment/argocd-repo-server
-
-# Common causes:
-# 1. Wrong GitHub URL (check repoURL)
-# 2. Wrong path (default branch might not have p3/confs)
-# 3. YAML syntax error (use kubectl apply --dry-run to check)
-
-# To manually trigger sync:
-kubectl patch application macauchy-app -n argocd \
-  --type merge -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}'
+# Manual approach
+kubectl set image deployment/app app=image:v2
+# - Not tracked in Git
+# - No audit trail
+# - Hard to reproduce
+# - Can't code review
+# - Rollback is pain
 ```
 
-**Pitfall 2: "Pod not updating when I change the image"**
-
-Kubernetes has image pull policies:
-
-```yaml
-# In your deployment spec:
-containers:
-- name: app
-  image: wil42/playground:v1
-  imagePullPolicy: IfNotPresent  # ← This is the issue!
-```
-
-`IfNotPresent` means: "If I've seen this image before, don't pull it again."
-
-**Solution:**
-Change the image tag to force a pull:
-
-```yaml
-# Instead of: v1, v2, v3
-# Use: v1-20240114, v2-20240114, v3-20240114
-# Or use: v1-build123, v2-build456
-
-# Or set pull policy:
-imagePullPolicy: Always  # Always pull latest image
-```
-
-Or trigger a rollout restart:
-
+**Compare: GitOps Deployment**
 ```bash
-kubectl rollout restart deployment/macauchy-app -n dev
+# Git approach
+git commit -m "update app to v2"
+git push
+# - Tracked in Git
+# - Full audit trail (when, who, why)
+# - Reproducible (git checkout old-commit)
+# - Code review possible (pull request)
+# - Rollback is: git revert
 ```
-
-**Pitfall 3: "Argo CD using old version from cache"**
-
-Argo CD caches Git clones. If you push changes but they don't appear:
-
-```bash
-# Force clear the cache and resync
-kubectl rollout restart deployment/argocd-repo-server -n argocd
-kubectl patch application macauchy-app -n argocd \
-  --type merge -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}'
-```
-
-### Part 3 Reflection
-
-Part 3 is where everything clicks.
-
-In Parts 1 & 2, I was learning Kubernetes mechanics. In Part 3, I understood the philosophy. The goal isn't just "run applications on Kubernetes"—it's "manage infrastructure through Git."
-
-This changes everything:
-- Your entire infrastructure history is in Git
-- Every change has a commit message explaining why
-- You can rollback with `git revert`
-- Onboarding is simple: "clone the repo, run kubectl apply"
-- Disaster recovery is: `git log` to find the last good commit
-
-The seemingly simple idea—"Git is the source of truth"—actually solves a hundred operational problems.
 
 ---
 
 ## Common Pitfalls & Solutions
 
-### Network Pitfalls
+### Network & Infrastructure Issues
 
-**Problem: VMs can't reach each other**
+**Issue: VMs can't reach each other (Part 1)**
 
 ```bash
-# Vagrant networking setup:
-# - Host: 192.168.1.x (your actual network)
-# - Private network: 192.168.56.x (between VMs and host)
-
-# If pinging fails:
+# Diagnose
 vagrant ssh macauchyS
-ifconfig eth1  # Check if you have eth1
-ip a show      # Modern systems use this
+ping 192.168.56.111  # Try to reach worker
 
-# Should show: 192.168.56.110
+# If fails:
+# Check network exists
+ip addr show
+
+# Should show: eth1 with 192.168.56.110
 
 # If no eth1:
-# - Vagrant didn't create the private network
-# - Try: vagrant reload
-
-# If eth1 exists but wrong IP:
-# - Check Vagrantfile for typos
-# - Ensure no other VM uses same IP
+exit
+vagrant reload  # Reboot VM and reconfigure networking
 ```
 
-**Problem: K3s binds to wrong interface**
+**Issue: K3s binds to wrong interface**
 
 ```bash
-# K3s without --node-ip flag might bind to 127.0.0.1
-# Then other nodes can't reach it
+# Symptom: Worker can't reach server at 192.168.56.110
 
-# Solution: Always specify --node-ip for multi-node clusters
-# In setup_server.sh:
-curl -sfL https://get.k3s.io | \
-  INSTALL_K3S_EXEC="--node-ip=<CORRECT_IP>" sh -
+# Cause: K3s bound to wrong network interface (e.g., localhost)
+
+# Solution: Use --node-ip flag
+INSTALL_K3S_EXEC="--node-ip=192.168.56.110" sh -
 ```
 
-### Kubernetes Pitfalls
+### Kubernetes Issues
 
-**Problem: "ImagePullBackOff"**
+**Issue: "ImagePullBackOff"**
 
 ```bash
-# Pod stuck in "ImagePullBackOff" status
+# Symptom:
+kubectl get pods
+# Status: ImagePullBackOff
 
-# Common cause: Image doesn't exist or is private
+# This means: Can't pull the image
+
+# Diagnose:
 kubectl describe pod <pod-name>
+# Events section shows actual error
 
-# In the Events section, you'll see the actual error
-# - "image not found" → typo in image name
-# - "unauthorized" → private registry requires credentials
-# - "connection refused" → Docker registry is down
+# Common causes and fixes:
 
-# Solution:
-# 1. Check image name spelling: `docker search hashicorp/http-echo`
-# 2. Pull the image locally first: `docker pull hashicorp/http-echo`
-# 3. For private images, create imagePullSecrets
+# 1. Image doesn't exist
+#    Solution: Check spelling
+#    docker search hashicorp/http-echo
+
+# 2. Image is private (needs credentials)
+#    Solution: Create imagePullSecrets
+
+# 3. Docker registry is down
+#    Solution: Wait or use different registry
 ```
 
-**Problem: "CrashLoopBackOff"**
+**Issue: "CrashLoopBackOff"**
 
 ```bash
-# Pod crashes immediately after starting
+# Symptom: Pod starts but crashes immediately
 
-kubectl logs <pod-name>  # See what the error is
-kubectl logs <pod-name> --previous  # If it crashes before logs...
+# Diagnose:
+kubectl logs <pod-name>
+# Shows why the app crashed
 
 # Common causes:
-# - Container app crashes immediately (check logs)
-# - Wrong command/args (app doesn't recognize arguments)
-# - Missing config files
-# - Port already in use
+# 1. App doesn't accept arguments
+# 2. App can't find config files
+# 3. Port is already in use
+# 4. App has bugs
 
-# To debug:
-kubectl debug <pod-name> -it --image=busybox
-# Now you're in a container shell, can check things manually
+# Fix:
+# - Check app documentation
+# - Verify arguments are correct
+# - Check config file paths
 ```
 
-**Problem: "Pending" pod won't schedule**
+**Issue: Pod stuck in "Pending"**
 
 ```bash
-# Pod stuck in "Pending" indefinitely
+# Symptom: Pod won't start
 
+# Diagnose:
 kubectl describe pod <pod-name>
-# Check the "Events" section for why it can't schedule
+# Events section shows why
 
 # Common causes:
-# - Not enough resources (node is full)
-# - Unsatisfiable node selectors
-# - PVC doesn't exist
-# - Network policy blocking traffic
-
-# To see node resources:
-kubectl describe nodes
-# Check "Allocated resources" section
+# 1. Not enough resources
+#    kubectl describe nodes  # Check available resources
+#    kubectl set resources deployment <name> --limits=memory=512Mi
+#
+# 2. PersistentVolumeClaim doesn't exist
+#    kubectl get pvc
+#
+# 3. Node selector can't match
+#    kubectl get nodes --show-labels
+#
+# 4. Network policy blocking
+#    kubectl get networkpolicy
 ```
 
-### Vagrant Pitfalls
+### Git & GitHub Issues
 
-**Problem: VirtualBox guest additions mismatch**
-
-```bash
-# Error: VirtualBox Guest Additions version mismatch
-
-# Solution: Update VirtualBox
-brew upgrade virtualbox  # on macOS
-
-# Or: Install vagrant-vbguest plugin
-vagrant plugin install vagrant-vbguest
-
-# The plugin auto-syncs Guest Additions
-```
-
-**Problem: Port 6443 already in use**
-
-```bash
-# Error when creating cluster: "port 6443 already in use"
-
-# Another VM or service is using it
-
-lsof -i :6443  # Find what's using the port
-# Kill it or change port in Vagrantfile:
-config.vm.network "forwarded_port", guest: 6443, host: 6444
-```
-
-### Git and GitHub Pitfalls
-
-**Problem: Authentication fails when pushing**
+**Issue: Authentication fails when pushing**
 
 ```bash
 # Error: "Authentication failed"
 
 # Solution 1: Use HTTPS with personal access token
 git remote set-url origin https://github.com/username/repo.git
-# macOS: Credentials are stored in Keychain
-# Linux: Use a credential manager
+# macOS: Credentials stored in Keychain
+# Linux: Use credential manager or token
 
 # Solution 2: Use SSH
-git remote set-url origin git@github.com:username/repo.git
-# Requires SSH key setup
-
-# Generate SSH key if you don't have one:
 ssh-keygen -t ed25519 -C "your-email@example.com"
 # Add public key to GitHub Settings → SSH Keys
+git remote set-url origin git@github.com:username/repo.git
 ```
 
-**Problem: Argo CD can't access private GitHub repo**
+**Issue: Argo CD can't access private GitHub repo**
 
 ```bash
 # Argo CD works with public repos by default
-# For private repos, create a secret:
+# For private repos, create credentials secret:
 
-kubectl create secret generic repo-credentials \
+kubectl create secret generic gh-credentials \
   --from-literal=username=your-username \
   --from-literal=password=your-token \
   -n argocd
@@ -1441,107 +1854,133 @@ kubectl create secret generic repo-credentials \
 source:
   repoURL: https://github.com/username/private-repo.git
   username: your-username
-  password: your-token  # Reference the secret above
+  password: your-token
 ```
 
 ---
 
 ## Reflections & Key Learnings
 
-### What I Thought I Was Learning vs. What I Actually Learned
-
-**I thought:** "Spin up VMs, install Kubernetes, deploy apps. Done."
-
-**I actually learned:**
-1. **Infrastructure is code** - VMs, networking, configurations all described as code
-2. **Distributed systems are hard** - Making two systems talk reliably is complex
-3. **Containerization simplifies operations** - Docker/K3d vs Vagrant shows this clearly
-4. **GitOps is a philosophy, not just tooling** - It's about making Git the source of truth
-5. **Layered abstractions** - Each Kubernetes resource (Deployment, Service, Ingress) solves one problem well
-6. **Chaos is normal** - Things fail, networking breaks, pods crash. That's why systems need self-healing
-
 ### The Progression of Understanding
 
-**Day 1:** "I have a Kubernetes cluster! Time to deploy things."
-
+**Day 1: Confusion**
 ```bash
-kubectl apply -f deployment.yaml
+vagrant up
+# Magical things happen
+# VMs appear
+# Kubernetes is running
+# But... what just happened?
 ```
 
-"Why does nothing work? The pod is ImagePullBackOff..."
-
-**Day 2:** "Oh, services are how you access pods. That makes sense."
-
-But then: "Wait, why do I need both deployments AND services? Can't I just...?"
-
-This is when I realized: Kubernetes isn't designed for simplicity. It's designed for correctness and reliability. The layering actually *prevents* mistakes.
-
-**Day 3:** "I deployed v1. Now I need v2. Do I manually edit pods?"
-
-```bash
-kubectl edit deployment app-one  # Manual changes
+**Day 2: "Oh, services are endpoints"**
+```yaml
+kind: Service
+spec:
+  selector:
+    app: my-app
+  ports:
+  - port: 80
+    targetPort: 8080
 ```
 
-"This feels wrong. What if two people make changes? What if I forget what I changed?"
+"So service is a load balancer that finds pods with matching labels? That makes sense!"
 
-Then Argo CD clicked: **Git is the source of truth.** Everything flows from there.
+But then: "Why do I need both Deployment AND Service?"
 
-**Day 4:** "I understand the system now."
+This is when you realize: Kubernetes isn't designed for simplicity, it's designed for correctness. The separation is intentional.
 
-The whole picture made sense:
-- VMs → Kubernetes → Applications → GitOps → Automation
-- Each layer abstracts the one below
-- Your job shifts from "click buttons" to "describe desired state in code"
+**Day 3: "Git is the source of truth"**
 
-### The Real Value
+```bash
+git push
+# ... and the cluster automatically updates!
+```
 
-The specific technologies (Vagrant, K3s, Argo CD) matter less than the principles:
+"Wait, I didn't run kubectl once. The system updated itself from Git!"
 
-1. **Infrastructure as Code** - Systems should be describable, testable, version-controlled
-2. **Declarative over Imperative** - Tell the system "what you want," not "steps to get there"
-3. **Immutability** - Build once, deploy many times, same result
-4. **Self-healing** - Systems should detect and fix problems automatically
-5. **Auditability** - Everything should be logged and traceable
+That's when it clicked. You're not managing infrastructure anymore—you're declaring desired state in Git, and controllers ensure it's achieved.
 
-These principles apply whether you use:
-- Vagrant or Terraform or Ansible
-- K3s or full Kubernetes or Docker Swarm
-- Argo CD or Spinnaker or GitLab CI
+**Day 4: Full Understanding**
 
-### The Moment It Clicked
+The entire system makes sense:
+- Vagrant/VMs provide compute resources
+- Kubernetes orchestrates containers on those resources
+- Services provide networking
+- Ingress provides external access
+- Argo CD automates deployments from Git
+
+Each layer does one job well.
+
+### What This Teaches Beyond Specific Technologies
+
+This isn't really about Vagrant, K3s, or Argo CD. Those are tools.
+
+The real lessons:
+
+**1. Infrastructure as Code**
+- Describe your systems in code
+- Version control them
+- Automate their creation
+- Result: Reproducible, documented, auditable systems
+
+**2. Declarative Configuration**
+- Say "what you want" not "how to achieve it"
+- Kubernetes: "I want 5 replicas" (K8s figures out how)
+- Terraform: "I want this AWS infrastructure" (Terraform figures out how)
+- Git as GitOps: "I want this state" (Controllers figure out how)
+
+**3. Automation Scales Better Than Humans**
+- First app: manual kubectl commands are fine
+- 10 apps: Still manageable
+- 100 apps: Impossible manually, trivial with automation
+- 1000 apps: Requires automation
+
+Argo CD means 1000 apps = same effort as 1 app (just bigger Git repo)
+
+**4. Self-Healing Systems**
+- Don't build fragile systems
+- Build systems that detect and fix problems
+- Kubernetes does this (restartscrashed pods)
+- Argo CD does this (fixes drift from Git)
+- Production systems require this
+
+**5. Auditability is Security**
+- Every change tracked in Git
+- Git blame shows who changed what when why
+- Rollback to previous state
+- Security audits are simple (just check Git)
+
+### The Aha Moment
 
 Mine was when I:
-1. Changed `v1` to `v2` in a deployment.yaml
-2. Committed and pushed to GitHub
-3. Watched Argo CD automatically detect the change
-4. Saw the pod replaced with the new version
-5. Tested the app and it worked
+1. Changed the image tag in deployment.yaml
+2. Committed to Git
+3. Watched Argo CD automatically deploy it
+4. Tested the new version and it worked
 
-No manual kubectl commands. No "SSHing into the server to restart the service." Just Git, and the system updated itself.
+No SSH, no manual kubectl apply, no scripts. Just Git + automation.
 
-That's when I understood why DevOps exists: **to make deployments boring and reliable.**
+That's when I understood why modern DevOps exists. It's not to make things complicated—it's to make deployments boring and reliable.
 
 ---
 
 ## Going Deeper
 
-### Concepts to Explore Next
+### Concepts for Advanced Study
 
-**1. Persistent Storage**
-Currently, all data is lost if a pod crashes. Real applications need persistent volumes:
+**Persistent Storage**
+Your apps need data that survives pod crashes:
 
 ```yaml
-apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: app-data
+  name: database-data
 spec:
-  accessModes: [ "ReadWriteOnce" ]
+  accessModes: ["ReadWriteOnce"]
   resources:
     requests:
-      storage: 5Gi
+      storage: 10Gi
 ---
-apiVersion: apps/v1
 kind: Deployment
 spec:
   template:
@@ -1549,174 +1988,145 @@ spec:
       volumes:
       - name: data
         persistentVolumeClaim:
-          claimName: app-data
+          claimName: database-data
       containers:
-      - name: app
+      - name: db
         volumeMounts:
         - name: data
-          mountPath: /data
+          mountPath: /var/lib/postgresql
 ```
 
-**2. Configuration Management**
-Applications need configuration (database URLs, API keys, etc.). Kubernetes has ConfigMaps and Secrets:
+**StatefulSets**
+For applications that need persistent identity (databases, caches):
 
 ```yaml
-apiVersion: v1
-kind: ConfigMap
+kind: StatefulSet  # Instead of Deployment
 metadata:
-  name: app-config
-data:
-  DATABASE_URL: "postgres://db:5432/myapp"
-  LOG_LEVEL: "debug"
----
-apiVersion: apps/v1
-kind: Deployment
+  name: postgres
 spec:
-  template:
-    spec:
-      containers:
-      - name: app
-        envFrom:
-        - configMapRef:
-            name: app-config
+  replicas: 3
+  # Unlike Deployment, creates: postgres-0, postgres-1, postgres-2
+  # Stable network identity: postgres-0.postgres.default.svc.cluster.local
+  # Persistent storage per replica
+  # Ordered creation/deletion
 ```
 
-**3. Resource Limits**
-Containers should declare how much CPU/memory they need:
+**Resource Limits**
+Tell Kubernetes how much resources your app needs:
 
 ```yaml
 containers:
 - name: app
   resources:
     requests:
-      memory: "256Mi"
-      cpu: "250m"
+      memory: "256Mi"    # "I need at least 256MB"
+      cpu: "250m"        # "I need at least 0.25 cores"
     limits:
-      memory: "512Mi"
-      cpu: "500m"
-  # If it uses more than limits, Kubernetes kills it
+      memory: "512Mi"    # "Kill me if I use more than 512MB"
+      cpu: "500m"        # "Throttle me if I use more than 0.5 cores"
 ```
 
-**4. Health Checks**
+**Health Checks**
 Tell Kubernetes how to verify your app is healthy:
 
 ```yaml
-livenessProbe:
-  httpGet:
-    path: /health
-    port: 8080
-  initialDelaySeconds: 30
-  periodSeconds: 10
+containers:
+- name: app
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8080
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    # If /health fails, restart pod
 
-readinessProbe:
-  httpGet:
-    path: /ready
-    port: 8080
-  initialDelaySeconds: 5
-  periodSeconds: 5
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: 8080
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    # If /ready fails, remove from load balancer but don't restart
 ```
 
-**5. Network Policies**
+**Network Policies**
 Control traffic between pods:
 
 ```yaml
-apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: deny-all
+  name: allow-from-app
 spec:
-  podSelector: {}
+  podSelector:
+    matchLabels:
+      app: database
   policyTypes:
   - Ingress
-  # Default: deny all incoming traffic
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: backend
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Only pods with label "app: backend" can reach database
 ```
 
-### Advanced Topics
-
-**Helm**
-Package manager for Kubernetes. Instead of hand-writing YAML, use pre-made charts:
-
-```bash
-# Instead of deploying Postgres manually:
-kubectl apply -f postgres-deployment.yaml
-
-# Use Helm:
-helm repo add bitnami https://charts.bitnami.com/bitnami
-helm install my-postgres bitnami/postgresql \
-  --set postgresqlPassword=mypassword
-```
-
-**Kustomize**
-Template system for Kubernetes YAML. Build variations from a base:
-
-```
-base/
-  deployment.yaml
-  service.yaml
-overlays/
-  dev/
-    kustomization.yaml  # Dev overrides
-  prod/
-    kustomization.yaml  # Prod overrides
-```
-
-**Sealed Secrets**
-Encrypt secrets in Git (while keeping deployments in Git):
-
-```bash
-# Create a sealed secret
-echo -n "my-password" | kubectl create secret generic my-secret \
-  --from-file=/dev/stdin --dry-run=client -o yaml | \
-  kubeseal -f - > sealed-secret.yaml
-
-# Commit sealed-secret.yaml to Git
-# Only your cluster can decrypt it
-```
-
-**Observability**
-Monitor your cluster:
-
-```yaml
-# Prometheus: metrics collection
-# Grafana: visualization
-# ELK/Loki: logging
-# Jaeger: distributed tracing
-```
-
-### Real-World Patterns
+### Advanced Deployment Patterns
 
 **Blue-Green Deployments**
 ```bash
-# Deploy v2 alongside v1
+# Run v1 (blue) in production
+# Deploy v2 (green) alongside
 kubectl apply -f deployment-v2.yaml
 
-# Test v2 in production
-# If good: switch traffic
+# Test v2
+kubectl port-forward svc/my-app-v2 :8080
+
+# If good, switch traffic:
 kubectl patch service my-app -p '{"spec":{"selector":{"version":"v2"}}}'
 
-# If bad: roll back
+# If bad, switch back instantly:
 kubectl patch service my-app -p '{"spec":{"selector":{"version":"v1"}}}'
+
+# No downtime, instant rollback
 ```
 
 **Canary Deployments**
 ```yaml
-# Use Istio or Flagger to gradually route traffic to new version
-# Start: 10% to v2, 90% to v1
-# Monitor: If error rate is low
-# Increase: 50% to v2, 50% to v1
-# Finalize: 100% to v2
+# Use Flagger (a controller) to gradually route traffic
+# 10% → v2 (monitor error rate)
+# 25% → v2 (if good, increase)
+# 50% → v2
+# 100% → v2
+
+# If error rate spikes at any point: automatic rollback
 ```
 
-**Multi-Environment Setup**
-```
-cluster-prod/    # Production cluster
-cluster-staging/ # Staging cluster
-cluster-dev/     # Development cluster
+**Multi-Environment GitOps**
 
-# Each watches different Git branch
-# prod watches: main branch
-# staging watches: develop branch
-# dev watches: dev branch
+```
+github.com/company/infrastructure
+  ├── clusters/
+  │   ├── dev/
+  │   │   ├── namespace-dev.yaml
+  │   │   └── apps.yaml (replicas: 1, no resources)
+  │   ├── staging/
+  │   │   ├── namespace-staging.yaml
+  │   │   └── apps.yaml (replicas: 2, medium resources)
+  │   └── prod/
+  │       ├── namespace-prod.yaml
+  │       └── apps.yaml (replicas: 5, high resources)
+  │
+  └── Argo CD Applications:
+      ├── dev-app → watches dev/
+      ├── staging-app → watches staging/
+      └── prod-app → watches prod/
+
+# Each environment has its own Argo CD Application
+# Each watches different directory
+# Changes propagate: dev → staging → prod (as you promote)
 ```
 
 ---
@@ -1726,148 +2136,158 @@ cluster-dev/     # Development cluster
 ### Vagrant Commands
 
 ```bash
-# Create and provision VMs
-vagrant up
+# Lifecycle
+vagrant up                    # Create and start VMs
+vagrant ssh <vm-name>       # SSH into VM
+vagrant halt                # Stop VMs (keep disk)
+vagrant destroy -f          # Delete VMs completely
+vagrant reload              # Reboot and re-provision
+vagrant reload --provision  # Force re-run provisioning scripts
 
-# SSH into a specific VM
-vagrant ssh macauchyS
-
-# Check status
-vagrant status
-
-# Stop VMs (keep them)
-vagrant halt
-
-# Destroy VMs completely
-vagrant destroy -f
-
-# Reload VMs (reboot and re-provision)
-vagrant reload --provision
-
-# Check if Vagrantfile is valid
-vagrant validate
+# Status
+vagrant status              # Check all VMs
+vagrant validate            # Check Vagrantfile syntax
+vagrant global-status       # All VMs across all directories
 ```
 
-### Kubernetes Commands
+### Kubernetes Commands (kubectl)
 
 ```bash
-# Cluster info
-kubectl cluster-info
-kubectl get nodes
-kubectl describe node <node-name>
+# Cluster Info
+kubectl cluster-info                # Cluster address
+kubectl get nodes                   # List nodes
+kubectl describe node <name>        # Detailed node info
 
 # Deployments
-kubectl get deployments
-kubectl describe deployment <name>
-kubectl scale deployment <name> --replicas=5
-kubectl rollout status deployment/<name>
-kubectl rollout restart deployment/<name>
-kubectl rollout history deployment/<name>
-kubectl rollout undo deployment/<name>
-
-# Services
-kubectl get svc
-kubectl port-forward svc/<name> 8080:80
-
-# Ingress
-kubectl get ingress
-kubectl describe ingress <name>
+kubectl get deployments             # List
+kubectl describe deployment <name>  # Details
+kubectl logs deployment/<name>      # Logs
+kubectl scale deployment <name> --replicas=3  # Scale
+kubectl set image deployment/<name> app=image:v2  # Update image
+kubectl rollout status deployment/<name>       # Watch update
+kubectl rollout restart deployment/<name>      # Restart pods
+kubectl rollout history deployment/<name>      # Version history
+kubectl rollout undo deployment/<name>         # Rollback
 
 # Pods
-kubectl get pods
-kubectl get pods -A  # All namespaces
-kubectl describe pod <name>
-kubectl logs <name>
-kubectl logs <name> --previous  # Crashed pod
-kubectl exec -it <name> -- bash  # Shell into pod
-kubectl delete pod <name>
+kubectl get pods                    # List
+kubectl get pods -A                 # All namespaces
+kubectl describe pod <name>         # Details
+kubectl logs <pod-name>             # Logs
+kubectl logs <pod-name> --previous  # Previous container logs
+kubectl exec -it <pod> -- bash      # Shell into pod
+kubectl port-forward pod/<name> 8080:8080  # Port forward
+kubectl delete pod <name>           # Delete (will respawn if in deployment)
+
+# Services & Ingress
+kubectl get svc                     # List services
+kubectl get ingress                 # List ingress
+kubectl describe ingress <name>     # Ingress details
+
+# Configuration
+kubectl get configmap               # List
+kubectl describe configmap <name>   # Details
+kubectl get secret                  # List
+kubectl get secret <name> -o yaml   # View secret (base64 encoded)
 
 # Debugging
-kubectl get events
-kubectl debug pod/<name> -it --image=busybox
+kubectl get events                  # Recent cluster events
+kubectl describe pod <pod>          # Shows events explaining issues
+kubectl logs --tail=50 <pod>        # Last 50 lines
+kubectl debug pod/<pod> -it --image=busybox  # Debug container
 
-# YAML operations
-kubectl apply -f deployment.yaml
-kubectl apply -f <directory>/  # All files in directory
+# YAML Operations
+kubectl apply -f deployment.yaml               # Create/update
+kubectl apply -f ./directory/                  # All files in directory
 kubectl apply --dry-run=client -f deployment.yaml  # Preview changes
-kubectl diff -f deployment.yaml
-kubectl delete -f deployment.yaml
+kubectl diff -f deployment.yaml                # Show differences
+kubectl delete -f deployment.yaml              # Remove
+kubectl edit deployment <name>                 # Edit in editor
+kubectl patch deployment <name> -p '{"spec":{"replicas":3}}'  # Patch
 ```
 
 ### K3d Commands
 
 ```bash
-# Create cluster
-k3d cluster create <name> --servers 1 --agents 2
+# Cluster Management
+k3d cluster create <name>           # Create cluster
+k3d cluster list                    # List clusters
+k3d cluster delete <name>           # Delete cluster
+k3d cluster start <name>            # Start stopped cluster
+k3d cluster stop <name>             # Stop cluster
 
-# List clusters
-k3d cluster list
+# Node Management
+k3d node create --cluster=<cluster> # Add node
+k3d node list -c <cluster>          # List nodes in cluster
 
-# Delete cluster
-k3d cluster delete <name>
-
-# Get kubeconfig
-k3d kubeconfig get <name>
-
-# Stop/start cluster
-k3d cluster stop <name>
-k3d cluster start <name>
+# Docker Integration
+k3d image import <image> -c <cluster>  # Import image into cluster
 ```
 
 ### Argo CD Commands
 
 ```bash
-# Port forward to Argo CD UI
+# Access UI
 kubectl port-forward svc/argocd-server -n argocd 8080:443
 
-# Get admin password
+# Get Credentials
 kubectl -n argocd get secret argocd-initial-admin-secret \
   -o jsonpath="{.data.password}" | base64 -d; echo
 
-# List applications
+# List Applications
 kubectl get application -n argocd
+kubectl get application -n argocd -o wide
 
-# Check application status
+# Get Status
 kubectl describe application <name> -n argocd
+kubectl get application <name> -n argocd -o jsonpath='{.status.sync.status}'
 
-# Manual sync
+# Trigger Sync
 kubectl patch application <name> -n argocd \
   --type merge -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}'
 
-# View sync history
-kubectl get application <name> -n argocd \
-  -o jsonpath='{.status.operationState}'
+# View Logs
+kubectl logs -n argocd deployment/argocd-application-controller
+kubectl logs -n argocd deployment/argocd-repo-server
+kubectl logs -n argocd deployment/argocd-server
 ```
 
 ### Git Commands
 
 ```bash
-# Clone
-git clone <url>
+# Setup
+git config user.name "Your Name"
+git config user.email "you@example.com"
+git clone <url>                     # Clone repository
 
-# Commit and push
-git add <file>
-git commit -m "message"
-git push origin main
+# Everyday
+git status                          # See changes
+git add <file>                      # Stage changes
+git add .                           # Stage all
+git commit -m "message"             # Commit with message
+git push origin <branch>            # Push to remote
 
-# View history
-git log --oneline
-git log -p  # With diffs
-git show <commit>
+# Branching
+git branch                          # List branches
+git branch <name>                   # Create branch
+git checkout <name>                 # Switch branch
+git checkout -b <name>              # Create and switch
 
-# Branches
-git branch  # List
-git branch <name>  # Create
-git checkout <name>  # Switch
-git checkout -b <name>  # Create and switch
+# History
+git log --oneline                   # Recent commits
+git log -p                          # With changes
+git show <commit>                   # Show commit details
 
-# Rollback
-git revert <commit>  # Create new commit that undoes changes
-git reset --hard <commit>  # Danger: discard all changes after commit
+# Undo
+git restore <file>                  # Undo local changes
+git restore .                       # Undo all local changes
+git revert <commit>                 # Create undo commit (safe)
+git reset --hard <commit>           # Discard commits (danger!)
 
-# Undo uncommitted changes
-git restore <file>
-git restore .  # All files
+# Diff
+git diff                            # Unstaged changes
+git diff --staged                   # Staged changes
+git diff <branch>                   # Compare branches
 ```
 
 ---
@@ -1876,113 +2296,169 @@ git restore .  # All files
 
 ### The Journey Mapped
 
-When I started this project, I saw three separate parts:
-1. "VMs and networking" (Part 1)
-2. "Kubernetes and deployments" (Part 2)
-3. "Argo CD and automation" (Part 3)
+When I started, I saw three separate parts. By the end, I understood they tell one coherent story:
 
-By the end, I realized they tell one cohesive story:
+**Part 1: Foundation**
+- Build VMs (Vagrant abstracts VM complexity)
+- Configure networking (private network enables communication)
+- Install K3s (K3s abstracts Kubernetes complexity)
+- Demonstrate clustering (multiple machines working together)
 
-**Part 1:** Builds the foundation
-- VMs are the underlying hardware abstraction
-- Networking makes systems communicate
-- K3s is lightweight Kubernetes (the orchestrator)
+**Part 2: Application Deployment**
+- Deploy apps (Deployments manage containers)
+- Expose services (Services provide stable endpoints)
+- Route traffic (Ingress routes external traffic)
+- Demonstrate orchestration (K8s manages app lifecycle)
 
-**Part 2:** Teaches operational patterns
-- Deployments manage application replicas
-- Services provide stable endpoints
-- Ingress routes external traffic
-- These patterns are how real systems work
+**Part 3: Automation**
+- Store configs in Git (version control and auditability)
+- Automate deployments (Argo CD watches Git and syncs)
+- Achieve GitOps (Git becomes source of truth)
+- Demonstrate reliability (self-healing, easy rollback)
 
-**Part 3:** Applies modern practices
-- Git becomes the source of truth
-- Argo CD automates the deployment pipeline
-- Humans write YAML, machines execute it
-- Everything is automated, audited, reversible
+### Why Each Abstraction Layer Matters
 
-### Why This Matters
+**Vagrant**
+- Without Vagrant, infrastructure is manual (time-consuming, error-prone)
+- With Vagrant, infrastructure is code (reproducible, documented, testable)
 
-In 2024, infrastructure isn't a cost center to minimize. It's a competitive advantage. Companies that can deploy reliably, quickly, and safely win.
+**Kubernetes**
+- Without K8s, you manage containers manually (impossible at scale)
+- With K8s, containers self-orchestrate (scaling, healing, updates)
 
-This project teaches you how to be that person:
-- **Reliability:** Automated, tested, reproducible deployments
-- **Speed:** Spin up environments in minutes, not days
-- **Safety:** Everything is version-controlled, audited, and reversible
+**Argo CD**
+- Without GitOps, deployments are imperative (undocumented, unauditable)
+- With GitOps, deployments are declarative (documented, auditable, reversible)
 
-You're not just learning technologies. You're learning to think like a systems architect.
+Each layer removes complexity from the level above.
 
-### The Moment of Truth
+### The Real Value
 
-The moment you truly understand this is when you:
-1. Make a change to a file
-2. Run `git push`
-3. Watch your production system automatically update
-4. See everything working perfectly
+The specific tools (Vagrant, K3s, Argo CD) matter less than the principles they demonstrate:
 
-That's when you realize: you've automated the entire pipeline from "I have an idea" to "it's running in production."
+1. **Infrastructure as Code** - Systems described in files, not clicked in GUIs
+2. **Declarative Configuration** - Describe desired state, let controllers achieve it
+3. **Automation at Scale** - Manage 1 app or 1000 apps with same complexity
+4. **Self-Healing Systems** - Systems detect and fix problems automatically
+5. **Auditability** - Everything tracked, reversible, understandable
 
-That's the power of modern DevOps.
+These principles apply everywhere:
+- Use Terraform instead of Vagrant? Same principles
+- Use AWS ECS instead of Kubernetes? Same principles
+- Use Flux instead of Argo CD? Same principles
 
-### Next Steps
+### The Aha Moment (Mine Was...)
 
-If you've completed this project, you're ready for:
-- **Kubernetes in production:** Use these patterns at real companies
-- **Multi-cloud deployments:** Extend to AWS, GCP, Azure
-- **Advanced observability:** Prometheus, Grafana, ELK
-- **Service mesh:** Istio for complex networking
-- **GitOps at scale:** Organizations with hundreds of developers
-- **Disaster recovery:** Multi-region, high-availability clusters
+Watching my commit automatically deploy to production. No scripts, no manual steps, just Git + automation.
 
-But more importantly, you've developed the mindset:
-- **Everything should be code**
-- **Automation is mandatory**
-- **Git is the source of truth**
-- **Humans describe desired state, machines achieve it**
+That's when I understood: **The goal of infrastructure is not to be clever or impressive. It's to be boring and reliable.**
 
-Apply these principles to any infrastructure problem, and you'll build systems that scale.
+Boring means:
+- Deployments work the same way every time
+- Failures are detected and fixed automatically
+- Changes are tracked and reversible
+- New team members can understand the system
+- You can deploy with confidence at 3 AM
+
+### Why This Matters for Your Career
+
+Understanding these principles:
+- Makes you valuable (this is what companies pay for)
+- Makes you confident (you understand complex systems)
+- Makes you productive (automation does work for you)
+- Makes you adaptable (principles apply to any stack)
+
+Companies aren't looking for experts in Kubernetes 1.31.5. They're looking for people who understand:
+- How to describe infrastructure as code
+- How to automate deployments
+- How to build self-healing systems
+- How to make changes safely and reversibly
+
+This project teaches those.
 
 ---
 
 ## Final Thoughts
 
-Six months ago, when I started this project, I thought it was a homework assignment. Now I realize it's a blueprint for modern infrastructure.
+Six months ago, I thought this was a homework project. Now I see it's a foundation for understanding modern infrastructure.
 
-Vagrant, Kubernetes, and Argo CD aren't arbitrary technologies. They're solutions to real problems:
-- **Vagrant:** How do you create consistent development environments?
-- **Kubernetes:** How do you orchestrate thousands of containers?
-- **Argo CD:** How do you manage deployments declaratively?
+The infrastructure landscape changes constantly:
+- Kubernetes 1.30 → 1.31 → 1.32
+- Argo CD gets new features
+- New tools emerge (more automation, better observability)
 
-Master the principles, and you can pick any tools. Learn them from this project, and you'll recognize these patterns everywhere.
-
-The infrastructure landscape changes, but the principles are eternal:
+But the principles are eternal:
 - Code drives operations
 - Automation scales better than humans
-- Version control is truth
-- Self-healing is essential
-- Observability enables debugging
+- Version control enables safety
+- Self-healing creates reliability
+- Declarative configuration beats imperative
 
-Build with these principles, and your systems will outlast any specific technology.
+Master the principles, understand any new tool.
+
+You've built:
+- ✅ A reproducible multi-node cluster
+- ✅ Applications running on Kubernetes
+- ✅ An automated deployment pipeline
+- ✅ Understanding of modern DevOps
+
+The infrastructure journey doesn't end here. It's just beginning.
+
+What comes next:
+- **Observability:** Prometheus + Grafana (see what's happening)
+- **Secrets Management:** Vault or Sealed Secrets (secure credentials)
+- **Service Mesh:** Istio or Linkerd (advanced networking)
+- **Cost Optimization:** Rightsizing, node consolidation
+- **Disaster Recovery:** Backups, multi-region failover
+- **Security:** RBAC, network policies, admission controllers
+
+But you have the foundation. Everything else builds on principles you've now learned.
 
 ---
 
-**This is the end of the journey, but the beginning of your infrastructure career. Good luck, and may your deployments be boring and reliable.**
+## Appendix: Quick Reference Checklists
+
+### Part 1 Checklist
+
+- [ ] Vagrant and VirtualBox installed
+- [ ] Vagrantfile created with two VMs
+- [ ] Server setup script written (installs K3s)
+- [ ] Worker setup script written (joins cluster)
+- [ ] `vagrant up` succeeds
+- [ ] `kubectl get nodes` shows 2 nodes, both Ready
+- [ ] kubeconfig extracted and saved
+- [ ] Can access cluster from host machine
+
+### Part 2 Checklist
+
+- [ ] Part 2 Vagrantfile created (single VM)
+- [ ] Deployment manifests created (3 apps)
+- [ ] Service manifests created (3 services)
+- [ ] Ingress manifest created
+- [ ] `vagrant up` succeeds
+- [ ] Applications deployed: `kubectl apply -f confs/apps.yaml`
+- [ ] Ingress deployed: `kubectl apply -f confs/ingress.yaml`
+- [ ] Can access apps via hostname
+- [ ] Can scale deployments
+- [ ] Self-healing works (pod restart, replica restoration)
+
+### Part 3 Checklist
+
+- [ ] Docker installed
+- [ ] K3d installed
+- [ ] K3d cluster created with `k3d cluster create macauchy`
+- [ ] Argo CD installed: `kubectl apply -n argocd -f manifest`
+- [ ] GitHub repository is public
+- [ ] Manifests in p3/confs/ pushed to GitHub
+- [ ] Argo CD Application created and synced
+- [ ] Application deployed and accessible
+- [ ] Test GitOps: change v1 → v2 in Git
+- [ ] Automatic sync confirmed (Argo CD syncs change)
+- [ ] Application v2 verified working
 
 ---
 
-### About This Guide
+**You've completed the entire journey. Congratulations.** 🎉
 
-Written from the perspective of someone learning this material and discovering insights along the way. Code examples are production-inspired but simplified for clarity. Concepts are explained from first principles, assuming no prior Kubernetes experience.
-
-Intended for intermediate software engineers who understand containerization and want to level up to infrastructure automation.
-
-**Questions? Debugging issues?** The common pitfalls section should have solutions. If not, remember: every error message contains information. Read it carefully, google it, and you'll usually find your answer.
-
-**Want to extend this?** Try:
-- Adding persistent storage to the applications
-- Setting up a GitLab instance (the bonus part)
-- Creating multiple environments (dev, staging, prod)
-- Implementing proper RBAC and network policies
-- Adding monitoring and logging
-
-The learning never stops. That's what makes this field exciting.
+The infrastructure world is now yours to build upon.
 
