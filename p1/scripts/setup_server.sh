@@ -27,7 +27,6 @@ echo ""
 echo "=== Installing K3s Server ==="
 
 # Install k3s in SERVER mode with detected IP
-# The --advertise-address is typically the node IP for single-network setups
 curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--node-ip=${NODE_IP} --advertise-address=${NODE_IP} --flannel-iface=eth1" sh -
 
 echo "=== K3s Server installed, waiting for token ==="
@@ -42,16 +41,81 @@ done
 echo "=== Token generated, starting token server ==="
 
 # Start a simple HTTP server to share the token with worker nodes
-# Using Python's HTTP server to serve the token file
 TOKEN_DIR=$(mktemp -d)
 cp "$TOKEN_FILE" "$TOKEN_DIR/node-token"
 cd "$TOKEN_DIR"
 
-# Start HTTP server in background on port 8080, bind to private network IP
-nohup python3 -m http.server 8080 --bind 192.168.56.110 > /var/log/token-server.log 2>&1 &
-echo "Token server started on http://192.168.56.110:8080/node-token"
+# Start HTTP server in background on port 8080, bind to detected IP
+nohup python3 -m http.server 8080 --bind "${NODE_IP}" > /var/log/token-server.log 2>&1 &
+echo "Token server started on http://${NODE_IP}:8080/node-token"
 
 # Keep the server running for 10 minutes then clean up
 (sleep 600 && pkill -f "http.server 8080" 2>/dev/null) &
 
+echo ""
+echo "=== Generating external kubeconfig ==="
+
+# Wait for K3s to be fully ready
+echo "Waiting for K3s API server to be ready..."
+for i in {1..30}; do
+    if /usr/local/bin/kubectl --kubeconfig=/etc/rancher/k3s/k3s.yaml get nodes &>/dev/null; then
+        echo "✓ K3s API server is ready"
+        break
+    fi
+    echo "Attempt $i/30: Waiting for K3s API..."
+    sleep 2
+done
+
+# Make kubeconfig readable
+sudo chmod 644 /etc/rancher/k3s/k3s.yaml
+
+# Create an external kubeconfig using simple string extraction
+# This avoids complex YAML parsing and is more reliable
+EXTERNAL_CONFIG="/home/vagrant/k3s.yaml"
+
+# Extract client cert and key from original kubeconfig
+CLIENT_CERT=$(grep "client-certificate-data:" /etc/rancher/k3s/k3s.yaml | head -1 | awk '{print $2}')
+CLIENT_KEY=$(grep "client-key-data:" /etc/rancher/k3s/k3s.yaml | head -1 | awk '{print $2}')
+
+# Create the external kubeconfig file with insecure TLS verification
+cat > "$EXTERNAL_CONFIG" << EOF
+apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    insecure-skip-tls-verify: true
+    server: https://${NODE_IP}:6443
+  name: default
+contexts:
+- context:
+    cluster: default
+    user: default
+  name: default
+current-context: default
+users:
+- name: default
+  user:
+    client-certificate-data: ${CLIENT_CERT}
+    client-key-data: ${CLIENT_KEY}
+EOF
+
+echo "✓ kubeconfig created at /home/vagrant/k3s.yaml"
+
+# Copy kubeconfig to /vagrant (shared folder) if available for easy host access
+if [ -d "/vagrant" ]; then
+    cp "$EXTERNAL_CONFIG" /vagrant/k3s.yaml
+    echo "✓ kubeconfig also copied to /vagrant/k3s.yaml for host access"
+else
+    echo "Note: /vagrant not available. Copy kubeconfig from host:"
+    echo "  vagrant ssh macauchyS -c 'cat /home/vagrant/k3s.yaml' > k3s.yaml"
+fi
+
+echo ""
 echo "=== K3s Server setup complete ==="
+echo ""
+echo "Access cluster from inside VM:"
+echo "  kubectl --kubeconfig=/etc/rancher/k3s/k3s.yaml get nodes"
+echo ""
+echo "Access cluster from host:"
+echo "  export KUBECONFIG=\$PWD/k3s.yaml"
+echo "  kubectl get nodes"
