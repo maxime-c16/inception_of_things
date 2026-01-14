@@ -24,12 +24,14 @@
 3. [What This Project Actually Teaches](#what-this-project-teaches)
 4. [Prerequisites & Setup](#prerequisites--setup)
 5. [Part 1: Building Your First Multi-Node K3s Cluster](#part-1-building-your-first-multi-node-k3s-cluster)
-6. [Part 2: Running Applications on Kubernetes](#part-2-running-applications-on-kubernetes)
-7. [Part 3: GitOps with Argo CD](#part-3-gitops-with-argo-cd)
-8. [Common Pitfalls & Solutions](#common-pitfalls--solutions)
-9. [Reflections & Key Learnings](#reflections--key-learnings)
-10. [Going Deeper](#going-deeper)
-11. [Practical Command Reference](#practical-command-reference)
+   - [Common Pitfalls & Solutions](#common-pitfalls-in-part-1)
+6. [Part 1: Summary & What You've Learned](#part-1-summary--what-youve-learned)
+7. [Part 2: Running Applications on Kubernetes](#part-2-running-applications-on-kubernetes)
+8. [Part 3: GitOps with Argo CD](#part-3-gitops-with-argo-cd)
+9. [Common Pitfalls & Solutions](#common-pitfalls--solutions)
+10. [Reflections & Key Learnings](#reflections--key-learnings)
+11. [Going Deeper](#going-deeper)
+12. [Practical Command Reference](#practical-command-reference)
 
 ---
 
@@ -1035,7 +1037,67 @@ vagrant up
 
 ---
 
+## Part 1: Summary & What You've Learned
+
+Congratulations! If you successfully ran `vagrant up` and have a working 2-node K3s cluster, you've accomplished a lot. Here's what you learned:
+
+### Technical Skills Gained
+
+1. **Infrastructure as Code** - Using Vagrant to define and create VMs reproducibly
+2. **Kubernetes Fundamentals** - How K3s works, components, networking
+3. **Networking** - Private networks, inter-node communication, CNI plugins (Flannel)
+4. **System Administration** - SSH, shell scripts, systemd services, package management
+5. **Debugging** - Troubleshooting VMs, checking logs, understanding error messages
+6. **Modern Interface Naming** - Adapting scripts to different Linux distributions
+
+### What Your Cluster Can Do Now
+
+✅ **Two nodes communicating** - Server and worker connected via private network
+✅ **Self-healing** - K3s automatically restarts failed pods
+✅ **Service discovery** - Pods can find each other by DNS names
+✅ **Container orchestration** - K3s automatically schedules containers on available nodes
+✅ **Built-in networking** - Flannel CNI ensures pod-to-pod communication
+
+### Key Decisions Made
+
+- **Why K3s not full Kubernetes?** - Lightweight, easier to learn, same concepts
+- **Why two nodes?** - Teaches clustering and networking, not just single-machine setup
+- **Why Vagrant?** - Reproducible infrastructure, version-controlled, educational
+- **Why AlmaLinux 9?** - Realistic production OS, not just Ubuntu
+
+### Next: What Part 2 Will Add
+
+Part 1 gave you a working cluster. Part 2 will show you how to actually **use** it:
+- Deploy real applications
+- Route traffic by hostname
+- Scale applications horizontally
+- Understand Kubernetes manifests (YAML files)
+
+You'll take this empty cluster and make it useful.
+
+---
+
 ## Part 2: Running Applications on Kubernetes
+
+### Getting Started with Part 2
+
+**What Changed:**
+- Part 1: 2-node cluster (teaches clustering & networking)
+- Part 2: Single-node cluster (focuses on application deployment)
+
+We're starting fresh with a simpler setup. Don't destroy your Part 1 cluster yet—you can keep it running or destroy it. This new cluster is in a different directory (`p2/`) with its own Vagrant setup.
+
+**Prerequisites:**
+- ✅ Understand basic Kubernetes concepts from Part 1
+- ✅ Vagrant installed and working
+- ✅ VirtualBox running and accessible
+
+**What We're Doing:**
+Instead of just having an empty cluster, we're now deploying **real applications** that actually do things. You'll deploy web services that respond to HTTP requests and route them by hostname.
+
+**The Big Picture:**
+Part 1 taught you "How do I build a cluster?"
+Part 2 teaches you "How do I run applications on it?"
 
 ### What We're Building
 
@@ -1056,20 +1118,30 @@ User requests → 192.168.56.110 (host: app1.com)
          Container responding with "Hello from App One"
 ```
 
-### Single-Node vs Multi-Node: Why the Change?
+### Why Switch to Single-Node for Part 2?
 
-**Part 1:** Two-node cluster
-- Teaches networking, clustering, multi-node concepts
-- More complex setup
-- Demonstrates real production patterns
+**Part 1 (2-node):** You learned infrastructure
+- Multiple nodes communicating
+- Clustering concepts
+- Network setup complexity
+- Real production architecture
 
-**Part 2:** Single-node cluster
-- Focuses on application deployment
+**Part 2 (1-node):** You learn application deployment
 - Simpler to understand
-- Still demonstrates Kubernetes concepts
-- K3s handles everything on one machine
+- Focus on YAML, services, ingress (not networking)
+- Faster to iterate on application changes
+- Single machine is sufficient for demonstrating all concepts
 
-**Real-world:** Most dev environments use single-node (easier). Production uses multi-node (reliability).
+**Why not keep the 2-node cluster?**
+- You *could*, but single-node is cleaner for application focus
+- 2-node cluster taught you what you needed about networking
+- Now we focus on different concepts (deployments, services, ingress)
+
+**Real-world use:**
+- Dev environments: Often single-node (easier, cheaper)
+- Production: Multi-node (reliability, scale, redundancy)
+
+This is a natural pedagogical progression: master infrastructure, then master applications.
 
 ### Kubernetes Manifests: The YAML Files
 
@@ -1388,6 +1460,48 @@ kubectl scale deployment app-two --replicas=2
 - Ingress controller built into K3s
 - Watches Ingress resources
 - Dynamically updates routing
+
+---
+
+## Part 2: Summary & Next Steps
+
+Congratulations! You now have a working Kubernetes cluster running real applications. Here's what you've accomplished:
+
+### Technical Skills Gained
+
+1. **Kubernetes Manifests** - Writing YAML to define Deployments, Services, Ingress
+2. **Declarative Operations** - Describing desired state, letting K8s achieve it
+3. **Application Scaling** - Increasing replicas to handle more traffic
+4. **Service Discovery** - How Kubernetes DNS makes services findable
+5. **Ingress Routing** - Host-based routing for multiple applications
+6. **Traefik Configuration** - Setting up load balancing and traffic management
+
+### What Your Cluster Can Do Now
+
+✅ **Run multiple applications** - Different services coexist peacefully
+✅ **Route by hostname** - app1.com gets different app than app2.com
+✅ **Scale horizontally** - Add more replicas without downtime
+✅ **Self-healing** - Crashed pods automatically restart
+✅ **Load balancing** - Traffic distributed across replicas
+✅ **Zero-downtime updates** - Rolling updates of application versions
+
+### The Problem We Haven't Solved Yet
+
+Everything we've done so far requires **manual kubectl commands**:
+
+```bash
+# Want to update app to v2?
+vim deployment.yaml           # Edit file
+kubectl apply -f deployment.yaml  # Run command
+```
+
+This works, but:
+- Not reproducible (did I apply the latest manifest?)
+- No audit trail (who changed what when?)
+- Error-prone (easy to forget kubectl apply)
+- Not scalable (what if 100 applications?)
+
+Part 3 solves this with **GitOps**: Git becomes source of truth, and Argo CD automatically keeps the cluster in sync.
 
 ---
 
