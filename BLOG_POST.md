@@ -562,24 +562,24 @@ This project takes you through each concept, building from simple (single VM) to
 ┌─────────────────────────────────────────────┐
 │           Host Machine (Your Computer)      │
 │                                             │
-│  ┌────────────────────────────────────┐   │
-│  │  VirtualBox (VM Software)          │   │
-│  │                                    │   │
-│  │  ┌──────────────────────────────┐ │   │
-│  │  │  VM 1: macauchyS (Server)    │ │   │
-│  │  │  - IP: 192.168.56.110        │ │   │
-│  │  │  - K3s: Control Plane        │ │   │
-│  │  └──────────────────────────────┘ │   │
-│  │                                    │   │
-│  │  ┌──────────────────────────────┐ │   │
-│  │  │  VM 2: macauchySW (Worker)   │ │   │
-│  │  │  - IP: 192.168.56.111        │ │   │
-│  │  │  - K3s: Worker Node          │ │   │
-│  │  └──────────────────────────────┘ │   │
-│  └────────────────────────────────────┘   │
+│  ┌────────────────────────────────────┐     │
+│  │  VirtualBox (VM Software)          │     │
+│  │                                    │     │
+│  │  ┌──────────────────────────────┐  │     │
+│  │  │  VM 1: macauchyS (Server)    │  │     │
+│  │  │  - IP: 192.168.56.110        │  │     │
+│  │  │  - K3s: Control Plane        │  │     │
+│  │  └──────────────────────────────┘  │     │
+│  │                                    │     │
+│  │  ┌──────────────────────────────┐  │     │
+│  │  │  VM 2: macauchySW (Worker)   │  │     │
+│  │  │  - IP: 192.168.56.111        │  │     │
+│  │  │  - K3s: Worker Node          │  │     │
+│  │  └──────────────────────────────┘  │     │
+│  └────────────────────────────────────┘     │
 │                                             │
-│  Both VMs connected via private network    │
-│  (192.168.56.x)                            │
+│  Both VMs connected via private network     │
+│  (192.168.56.x)                             │
 └─────────────────────────────────────────────┘
 ```
 
@@ -742,17 +742,19 @@ curl -sfL https://get.k3s.io | \
 
 5. `--flannel-iface=eth1`
    - Flannel is K3s's default network plugin
-   - `eth1` is the private network interface
+   - `eth1` is the private network interface (on older systems)
+   - Modern Linux distributions use predictable interface names like `enp0s8`, `enp0s9` instead of `eth0`, `eth1`
    - Without this, Flannel might use the wrong interface
+   - **Note:** Our scripts auto-detect the interface name, so it works on any system
 
 **Why is this complex?**
 
 Modern systems have multiple network interfaces:
 - `lo` (localhost, only VM itself)
-- `eth0` (NAT, VM to host)
-- `eth1` (private network, VM to VM)
+- `eth0` or `enp0s3` (NAT, VM to host)
+- `eth1` or `enp0s8` (private network, VM to VM) ← This one is critical for K3s
 
-Kubernetes needs to know which interface to use. You must tell it.
+Kubernetes needs to know which interface to use. You must tell it. The setup scripts automatically detect your system's interface names, so you don't need to manually specify them.
 
 ### The Token Sharing Mechanism
 
@@ -1730,11 +1732,14 @@ ping 192.168.56.111  # Try to reach worker
 # Check network exists
 ip addr show
 
-# Should show: eth1 with 192.168.56.110
+# Should show a private network interface (eth1, enp0s8, etc.) with 192.168.56.110
 
-# If no eth1:
+# If private network interface doesn't appear:
 exit
 vagrant reload  # Reboot VM and reconfigure networking
+
+# Our setup scripts automatically detect the interface name, so it works
+# with eth1, enp0s8, or other predictable naming schemes
 ```
 
 **Issue: K3s binds to wrong interface**

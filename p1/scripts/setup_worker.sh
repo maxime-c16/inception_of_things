@@ -3,10 +3,17 @@ set -e
 
 echo "=== Detecting Network Configuration ==="
 
-# Wait for eth1 to get an IP (Vagrant assigns it)
-INTERFACE="eth1"
+# Auto-detect the second network interface (supports eth1, enp0s8, etc.)
+# Skip lo (loopback) and eth0/enp0s3 (NAT), use the second interface (private network)
+INTERFACE=$(ip link show | grep -E "^[0-9]+:" | grep -v lo | awk -F: '{print $2}' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tail -1)
 NODE_IP=""
 
+if [ -z "$INTERFACE" ]; then
+    echo "ERROR: Could not detect network interface"
+    exit 1
+fi
+
+echo "Detected network interface: $INTERFACE"
 echo "Waiting for $INTERFACE to be assigned an IP address..."
 for i in {1..30}; do
     NODE_IP=$(ip addr show "$INTERFACE" 2>/dev/null | grep "inet " | awk '{print $2}' | cut -d/ -f1)
@@ -49,7 +56,7 @@ fi
 
 echo "=== Token received, installing K3s Agent ==="
 
-# Install k3s in AGENT mode with detected IP
-curl -sfL https://get.k3s.io | K3S_URL=https://192.168.56.110:6443 K3S_TOKEN=$TOKEN INSTALL_K3S_EXEC="--node-ip=${NODE_IP} --flannel-iface=eth1" sh -
+# Install k3s in AGENT mode with detected IP and interface
+curl -sfL https://get.k3s.io | K3S_URL=https://192.168.56.110:6443 K3S_TOKEN=$TOKEN INSTALL_K3S_EXEC="--node-ip=${NODE_IP} --flannel-iface=${INTERFACE}" sh -
 
 echo "=== K3s Worker setup complete ==="
