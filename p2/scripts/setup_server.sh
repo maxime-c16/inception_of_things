@@ -3,8 +3,12 @@ set -e
 
 echo "=== Installing K3s Server (Single Node) ==="
 
-# Install k3s in SERVER mode
-curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--node-ip=192.168.56.110 --advertise-address=192.168.56.110 --flannel-iface=eth1" sh -
+# Install k3s in SERVER mode (idempotent)
+if command -v k3s >/dev/null 2>&1; then
+    echo "k3s already installed; skipping installation"
+else
+    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--node-ip=192.168.56.110 --advertise-address=192.168.56.110 --flannel-iface=eth1" sh -
+fi
 
 echo "=== K3s Server installed, waiting for readiness ==="
 

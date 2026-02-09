@@ -59,6 +59,9 @@ TOKEN_DIR=$(mktemp -d)
 cp "$TOKEN_FILE" "$TOKEN_DIR/node-token"
 cd "$TOKEN_DIR"
 
+# Instead of using a small server, we could use the sync folder feature of Vagrant. config.vm.synced_folder
+# However, this would require more setup on the host side. A simple HTTP server is easier for demonstration.
+
 # Start HTTP server in background on port 8080, bind to detected IP
 nohup python3 -m http.server 8080 --bind "${NODE_IP}" > /var/log/token-server.log 2>&1 &
 echo "Token server started on http://${NODE_IP}:8080/node-token"

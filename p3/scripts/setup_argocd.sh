@@ -4,10 +4,20 @@ set -e
 echo "=== Installing Argo CD ==="
 echo ""
 
-echo "Step 1: Installing Argo CD from official manifests..."
-kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+echo "Ensuring namespace 'argocd' exists..."
+kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
 
-echo "✓ Argo CD manifests applied"
+echo ""
+echo "Applying official Argo CD manifests..."
+echo "Using --server-side and --force-conflicts to handle CRD size limitations (official approach)"
+echo ""
+
+# Official Argo CD installation method that handles CRD annotation size limit
+# See: https://argo-cd.readthedocs.io/en/stable/
+kubectl apply -n argocd --server-side --force-conflicts \
+  -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+
+echo "✓ Argo CD manifests applied successfully"
 echo ""
 
 echo "Step 2: Waiting for Argo CD to be ready (this may take 30-60 seconds)..."
