@@ -464,23 +464,59 @@ bash scripts/setup_k3d.sh
 echo "Installing Argo CD..."
 bash scripts/setup_argocd.sh
 
-# Step 3: Verify setup
-kubectl get nodes
-kubectl get pods -n argocd
-kubectl get namespaces
+# Step 3: Deploy application via Argo CD
+echo "Deploying application via Argo CD..."
+kubectl apply -f confs/argocd-app.yaml
+
+# Wait for app to deploy
+sleep 10
+kubectl get pods -n dev
+
+# Step 4: Verify v1 is running
+echo "Testing v1 application..."
+kubectl port-forward svc/macauchy-app -n dev 8888:8888 &
+PF_PID=$!
+sleep 2
+curl http://localhost:8888/
+# Expected: {"status":"ok", "message": "v1"}
+kill $PF_PID 2>/dev/null || true
+
+# Step 5: Update to v2 via GitOps
+echo "Updating to v2 (simulated local change, normally via Git push)..."
+sed -i 's/wil42\/playground:v1/wil42\/playground:v2/g' confs/deployment.yaml
+
+# Step 6: Re-sync the Application
+kubectl delete application macauchy-app -n argocd
+kubectl apply -f confs/argocd-app.yaml
+
+# Wait for Argo CD to detect and deploy v2
+sleep 15
+kubectl get pods -n dev
+
+# Step 7: Verify v2 is now running
+echo "Testing v2 application..."
+kubectl port-forward svc/macauchy-app -n dev 8888:8888 &
+PF_PID=$!
+sleep 2
+curl http://localhost:8888/
+# Expected: {"status":"ok", "message": "v2"}
+kill $PF_PID 2>/dev/null || true
 
 echo "=== All tests complete ==="
 echo ""
 echo "To access Argo CD UI:"
 echo "  kubectl port-forward svc/argocd-server -n argocd 8080:443"
 echo "  Then open https://localhost:8080"
+echo "  Username: admin"
+echo "  Password: $(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d)"
 ```
 
-# Verify
+# Verify all CRDs
 kubectl get pods -n argocd
 kubectl get crd | grep argoproj
+kubectl get all -n dev
 
-echo "=== All tests complete ==="
+echo "=== GitOps workflow complete ==="
 ```
 
 ---
