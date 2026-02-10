@@ -1,6 +1,6 @@
 .PHONY: setup cluster argocd deploy verify upgrade clean status help
 
-CLUSTER_NAME := inception
+CLUSTER_NAME := macauchy
 ARGOCD_NS := argocd
 DEV_NS := dev
 APP_NAME := macauchy-app
@@ -122,17 +122,26 @@ logs:
 	@echo "[→] Streaming logs from latest pod..."
 	@kubectl logs -n $(DEV_NS) -f deployment/$(APP_NAME) --tail=50
 
-# Scale deployment (usage: make scale N=3)
+# Scale deployment via GitOps (update Git, Argo CD syncs automatically)
+# Usage: make scale N=3
 scale:
 	@if [ -z "$(N)" ]; then \
 		echo "Usage: make scale N=<number>"; \
 		echo "Example: make scale N=3"; \
 		exit 1; \
 	fi
-	@echo "[→] Scaling $(APP_NAME) to $(N) replicas..."
-	@kubectl scale deployment $(APP_NAME) -n $(DEV_NS) --replicas=$(N)
-	@sleep 5
-	@kubectl get pods -n $(DEV_NS)
+	@echo "[→] Scaling $(APP_NAME) to $(N) replicas via GitOps..."
+	@cd .. && sed -i 's/replicas: [0-9]\+/replicas: $(N)/' p3/confs/deployment.yaml
+	@echo "[→] Updated deployment.yaml with replicas: $(N)"
+	@cd .. && git add p3/confs/deployment.yaml
+	@cd .. && git commit -m "Scale deployment to $(N) replicas"
+	@cd .. && git push origin main
+	@echo "[✓] Pushed to Git. Argo CD will sync in ~3 minutes (or use 'make status' to check)"
+	@echo "[→] Waiting for Argo CD sync..."
+	@sleep 10
+	@echo "[→] Current pod count:"
+	@kubectl get pods -n $(DEV_NS) | grep $(APP_NAME) | wc -l
+	@echo "[✓] Use 'make status' to see full status"
 
 # Show deployment rollout history
 history:
