@@ -8,14 +8,24 @@ APP_NAME := macauchy-app
 help:
 	@echo "Part 3 - K3d + Argo CD Makefile"
 	@echo ""
-	@echo "Available targets:"
+	@echo "=== Setup & Deployment ==="
 	@echo "  make setup       - Full setup: cluster + Argo CD + application"
 	@echo "  make cluster     - Create K3d cluster (idempotent)"
 	@echo "  make argocd      - Install Argo CD (idempotent)"
 	@echo "  make deploy      - Deploy application via Argo CD (idempotent)"
-	@echo "  make verify      - Verify v1 is running"
+	@echo "  make verify      - Verify current version is running"
 	@echo "  make upgrade     - Upgrade to v2 and verify"
+	@echo ""
+	@echo "=== Management ==="
 	@echo "  make status      - Show cluster status"
+	@echo "  make logs        - Stream logs from latest pod"
+	@echo "  make scale       - Scale deployment (usage: make scale N=3)"
+	@echo "  make rollback    - Rollback to previous version"
+	@echo "  make history     - Show deployment rollout history"
+	@echo "  make cleanup-rs  - Remove old ReplicaSets (keep only latest)"
+	@echo "  make port-forward - Port-forward app to localhost:8888"
+	@echo ""
+	@echo "=== Cleanup ==="
 	@echo "  make clean       - Remove everything"
 	@echo "  make help        - Show this message"
 
@@ -106,6 +116,57 @@ setup: cluster argocd deploy verify
 	@echo ""
 	@echo "=== Setup Complete ==="
 	@echo "Part 3 is ready! Use 'make upgrade' to test the v1→v2 GitOps workflow"
+
+# View logs from latest pod
+logs:
+	@echo "[→] Streaming logs from latest pod..."
+	@kubectl logs -n $(DEV_NS) -f deployment/$(APP_NAME) --tail=50
+
+# Scale deployment (usage: make scale N=3)
+scale:
+	@if [ -z "$(N)" ]; then \
+		echo "Usage: make scale N=<number>"; \
+		echo "Example: make scale N=3"; \
+		exit 1; \
+	fi
+	@echo "[→] Scaling $(APP_NAME) to $(N) replicas..."
+	@kubectl scale deployment $(APP_NAME) -n $(DEV_NS) --replicas=$(N)
+	@sleep 5
+	@kubectl get pods -n $(DEV_NS)
+
+# Show deployment rollout history
+history:
+	@echo "[→] Deployment rollout history:"
+	@kubectl rollout history deployment/$(APP_NAME) -n $(DEV_NS)
+
+# Rollback to previous version
+rollback:
+	@echo "[→] Rolling back to previous version..."
+	@kubectl rollout undo deployment/$(APP_NAME) -n $(DEV_NS)
+	@sleep 5
+	@echo "[✓] Rollback complete. Waiting for rollout..."
+	@kubectl rollout status deployment/$(APP_NAME) -n $(DEV_NS) --timeout=2m
+	@echo "[→] Checking new version..."
+	@kubectl port-forward svc/$(APP_NAME) -n $(DEV_NS) 8888:8888 > /dev/null 2>&1 &
+	@PF_PID=$$!; sleep 2; \
+	RESPONSE=$$(curl -s http://localhost:8888/ 2>/dev/null || echo "error"); \
+	kill $$PF_PID 2>/dev/null || true; \
+	echo "[✓] Current version: $$RESPONSE"
+
+# Remove old ReplicaSets (keep only 1 revision history)
+cleanup-rs:
+	@echo "[→] Cleaning up old ReplicaSets..."
+	@kubectl patch deployment $(APP_NAME) -n $(DEV_NS) \
+		-p '{"spec":{"revisionHistoryLimit":1}}'
+	@echo "[✓] Revision history limit set to 1"
+	@sleep 2
+	@kubectl get rs -n $(DEV_NS)
+
+# Port-forward to app
+port-forward:
+	@echo "[→] Port-forwarding app to localhost:8888..."
+	@echo "Press Ctrl+C to stop"
+	@kubectl port-forward svc/$(APP_NAME) -n $(DEV_NS) 8888:8888
 
 # Cleanup
 clean:
