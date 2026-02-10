@@ -24,4 +24,4 @@ spec:
       prune: true     # Delete resources that are removed from Git
       selfHeal: true  # Automatically sync if cluster drifts from Git
     syncOptions:
-    - CreateNamespace=true  # Create namespace if it doesn't exist
+    - CreateNamespace=true  # Create the namespace if it doesn't exist
