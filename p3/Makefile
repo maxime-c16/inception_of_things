@@ -169,7 +169,8 @@ cleanup-rs:
 		-p '{"spec":{"revisionHistoryLimit":1}}'
 	@echo "[✓] Revision history limit set to 1"
 	@sleep 2
-	@kubectl get rs -n $(DEV_NS)
+	@echo "[✓] Old ReplicaSets will be garbage collected. Current status:"
+	@kubectl get rs -n $(DEV_NS) -o wide
 
 # Port-forward to app
 port-forward:
