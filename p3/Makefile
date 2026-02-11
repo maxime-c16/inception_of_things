@@ -51,48 +51,94 @@ argocd: cluster
 
 # Application deployment - idempotent
 deploy: argocd
-	@echo "[→] Deploying application via Argo CD..."
-	@kubectl apply -f confs/argocd-app.yaml
-	@echo "[→] Waiting for application to deploy..."
-	@sleep 5
+	@echo "[→] Deploying application via Kustomize..."
+	@kubectl apply -k confs/
+	@echo "[→] Waiting for deployment to be ready..."
 	@kubectl rollout status deployment/macauchy-app -n $(DEV_NS) --timeout=2m || true
+	@echo "[→] Verifying deployment exists..."
+	@kubectl get deployment macauchy-app -n $(DEV_NS) > /dev/null 2>&1 && echo "[✓] Deployment ready" || exit 1
 
 # Verify v1 is running
 verify: deploy
 	@echo "[→] Verifying v1 is running..."
-	@kubectl port-forward svc/$(APP_NAME) -n $(DEV_NS) 8888:8888 > /dev/null 2>&1 &
-	@PF_PID=$$!; sleep 2; \
-	RESPONSE=$$(curl -s http://localhost:8888/ 2>/dev/null || echo "error"); \
-	kill $$PF_PID 2>/dev/null || true; \
-	if echo "$$RESPONSE" | grep -q 'v1'; then \
-		echo "[✓] v1 is running: $$RESPONSE"; \
-	else \
-		echo "[✗] v1 not responding properly: $$RESPONSE"; \
-		exit 1; \
-	fi
+	@for i in 1 2 3; do \
+		kubectl port-forward svc/$(APP_NAME) -n $(DEV_NS) 8888:8888 > /dev/null 2>&1 & \
+		PF_PID=$$!; \
+		sleep 2; \
+		RESPONSE=$$(curl -s http://localhost:8888/ 2>/dev/null || echo "error"); \
+		kill $$PF_PID 2>/dev/null || true; \
+		if echo "$$RESPONSE" | grep -q 'v1'; then \
+			echo "[✓] v1 is running: $$RESPONSE"; \
+			exit 0; \
+		fi; \
+		echo "[→] Attempt $$i failed, retrying..."; \
+		sleep 2; \
+	done; \
+	echo "[✗] v1 not responding properly: $$RESPONSE"; \
+	exit 1
 
 # Upgrade to v2
 upgrade: deploy
+	@echo "[→] Checking current version..."
+	@CURRENT_VERSION=$$(grep "image: wil42/playground" confs/deployment.yaml | grep -o 'v[0-9]' || echo "unknown"); \
+	if [ "$$CURRENT_VERSION" = "v2" ]; then \
+		echo "[✓] Already running v2"; \
+		exit 0; \
+	fi
 	@echo "[→] Upgrading to v2..."
 	@sed -i 's/wil42\/playground:v1/wil42\/playground:v2/g' confs/deployment.yaml
 	@echo "[→] Redeploying with v2..."
-	@kubectl delete application $(APP_NAME) -n $(ARGOCD_NS) 2>/dev/null || true
-	@kubectl apply -f confs/argocd-app.yaml
+	@kubectl apply -k confs/
 	@echo "[→] Waiting for v2 deployment..."
-	@sleep 8
 	@kubectl rollout status deployment/macauchy-app -n $(DEV_NS) --timeout=2m || true
 	@echo "[→] Verifying v2 is running..."
-	@kubectl port-forward svc/$(APP_NAME) -n $(DEV_NS) 8888:8888 > /dev/null 2>&1 &
-	@PF_PID=$$!; sleep 2; \
-	RESPONSE=$$(curl -s http://localhost:8888/ 2>/dev/null || echo "error"); \
-	kill $$PF_PID 2>/dev/null || true; \
-	if echo "$$RESPONSE" | grep -q 'v2'; then \
-		echo "[✓] v2 is running: $$RESPONSE"; \
-	else \
-		echo "[✗] v2 not responding properly: $$RESPONSE"; \
-		exit 1; \
+	@for i in 1 2 3; do \
+		kubectl port-forward svc/$(APP_NAME) -n $(DEV_NS) 8888:8888 > /dev/null 2>&1 & \
+		PF_PID=$$!; \
+		sleep 2; \
+		RESPONSE=$$(curl -s http://localhost:8888/ 2>/dev/null || echo "error"); \
+		kill $$PF_PID 2>/dev/null || true; \
+		if echo "$$RESPONSE" | grep -q 'v2'; then \
+			echo "[✓] v2 is running: $$RESPONSE"; \
+			exit 0; \
+		fi; \
+		echo "[→] Attempt $$i failed, retrying..."; \
+		sleep 2; \
+	done; \
+	echo "[✗] v2 not responding properly: $$RESPONSE"; \
+	exit 1
+
+# Downgrade back to v1 (for testing rollback)
+downgrade: deploy
+	@echo "[→] Checking current version..."
+	@CURRENT_VERSION=$$(grep "image: wil42/playground" confs/deployment.yaml | grep -o 'v[0-9]' || echo "unknown"); \
+	if [ "$$CURRENT_VERSION" = "v1" ]; then \
+		echo "[✓] Already running v1"; \
+		exit 0; \
 	fi
-	@git -C . diff confs/deployment.yaml 2>/dev/null || echo "(Git not initialized or no changes detected)"
+	@echo "[→] Downgrading back to v1..."
+	@sed -i 's/wil42\/playground:v2/wil42\/playground:v1/g' confs/deployment.yaml
+	@echo "[→] Redeploying with v1..."
+	@kubectl apply -k confs/
+	@echo "[→] Waiting for v1 deployment..."
+	@sleep 8
+	@kubectl rollout status deployment/macauchy-app -n $(DEV_NS) --timeout=2m || true
+	@echo "[→] Verifying v1 is running..."
+	@for i in 1 2 3; do \
+		kubectl port-forward svc/$(APP_NAME) -n $(DEV_NS) 8888:8888 > /dev/null 2>&1 & \
+		PF_PID=$$!; \
+		sleep 2; \
+		RESPONSE=$$(curl -s http://localhost:8888/ 2>/dev/null || echo "error"); \
+		kill $$PF_PID 2>/dev/null || true; \
+		if echo "$$RESPONSE" | grep -q 'v1'; then \
+			echo "[✓] v1 is running: $$RESPONSE"; \
+			exit 0; \
+		fi; \
+		echo "[→] Attempt $$i failed, retrying..."; \
+		sleep 2; \
+	done; \
+	echo "[✗] v1 not responding properly: $$RESPONSE"; \
+	exit 1
 
 # Show status
 status:
