@@ -12,6 +12,12 @@ fi
 
 echo "=== K3s Server installed, waiting for readiness ==="
 
+
+echo 'export KUBECONFIG=/home/vagrant/.kube/config' >> /home/vagrant/.bashrc
+echo "alias k='kubectl'" >> /home/vagrant/.bashrc
+
+echo "=== Created k alias ==="
+
 # Wait for K3s to be ready
 kubectl_path="/usr/local/bin/kubectl"
 max_retries=30

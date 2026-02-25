@@ -21,7 +21,7 @@ spec:
 apiVersion: v1 # this line specifies the API version
 kind: Service # this line specifies the kind of resource
 metadata:
-  name: app-one-svc
+  name: app-one
 spec:
   selector:
     app: app-one
@@ -50,7 +50,7 @@ spec:
 apiVersion: v1 # this line specifies the API version
 kind: Service # this line specifies the kind of resource
 metadata:
-  name: app-two-svc
+  name: app-two
 spec:
   selector:
     app: app-two
@@ -79,7 +79,7 @@ spec:
 apiVersion: v1 # this line specifies the API version
 kind: Service # this line specifies the kind of resource
 metadata:
-  name: app-three-svc
+  name: app-three
 spec:
   selector:
     app: app-three

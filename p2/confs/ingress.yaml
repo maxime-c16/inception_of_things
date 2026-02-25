@@ -12,7 +12,7 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: app-one-svc
+            name: app-one
             port: { number: 80 }
   - host: app2.com
     http:
@@ -21,15 +21,13 @@ spec:
           pathType: Prefix
           backend:
             service:
-              name: app-two-svc
+              name: app-two
               port: { number: 80 }
-
-# No host rule defined, default backend
   - http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: app-three-svc
+            name: app-three
             port: { number: 80 }

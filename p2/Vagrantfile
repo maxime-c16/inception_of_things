@@ -6,7 +6,6 @@ Vagrant.configure("2") do |config|
     config.vm.provider "virtualbox"
     config.vm.boot_timeout = 600
     
-    # Disable default synced folder (requires Guest Additions)
     config.vm.synced_folder ".", "/vagrant", disabled: true
     
     LOGIN = "macauchy"
