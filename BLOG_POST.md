@@ -1109,9 +1109,9 @@ User requests → 192.168.56.110 (host: app1.com)
                ↓
          Ingress Controller (Traefik)
                ↓
-         "app1.com → send to app-one-svc"
+         "app1.com → send to app-one"
                ↓
-         Service app-one-svc
+         Service app-one
                ↓
          Pod with "app: app-one" label
                ↓
@@ -1226,7 +1226,7 @@ kubectl apply -f deployment.yaml
 apiVersion: v1
 kind: Service
 metadata:
-  name: app-one-svc
+  name: app-one
 spec:
   selector:
     app: app-one
@@ -1260,8 +1260,8 @@ Service automatically:
 Within the cluster, you can access by name:
 ```bash
 # From inside a pod:
-curl http://app-one-svc:80
-# DNS resolves app-one-svc to service IP
+curl http://app-one:80
+# DNS resolves app-one to service IP
 # Service load-balances to actual pods
 ```
 
@@ -1288,9 +1288,9 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: app-one-svc
+            name: app-one
             port: { number: 80 }
-  # ↑ If request Host: app1.com → send to app-one-svc
+  # ↑ If request Host: app1.com → send to app-one
 
   - host: app2.com
     http:
@@ -1299,9 +1299,9 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: app-two-svc
+            name: app-two
             port: { number: 80 }
-  # ↑ If request Host: app2.com → send to app-two-svc
+  # ↑ If request Host: app2.com → send to app-two
 
   - http:
       paths:
@@ -1309,7 +1309,7 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: app-three-svc
+            name: app-three
             port: { number: 80 }
   # ↑ No host specified = catch-all default
   # If Host doesn't match above, use this
@@ -1320,9 +1320,9 @@ spec:
 ```
 External Request to 192.168.56.110
    ↓ (checks Host header)
-   ├─ Host: app1.com → app-one-svc
-   ├─ Host: app2.com → app-two-svc
-   └─ Other → app-three-svc
+   ├─ Host: app1.com → app-one
+   ├─ Host: app2.com → app-two
+   └─ Other → app-three
    ↓ (service load-balances)
    Pod responds
 ```
@@ -1368,7 +1368,7 @@ kubectl get deployments
 # app-three   1/1     1            1           2s
 
 kubectl get services
-# Shows: app-one-svc, app-two-svc, app-three-svc
+# Shows: app-one, app-two, app-three
 
 kubectl get ingress
 # Shows: main-ingress with routes for app1.com and app2.com

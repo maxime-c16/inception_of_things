@@ -12,9 +12,10 @@ help:
 	@echo "  make setup       - Full setup: cluster + Argo CD + application"
 	@echo "  make cluster     - Create K3d cluster (idempotent)"
 	@echo "  make argocd      - Install Argo CD (idempotent)"
-	@echo "  make deploy      - Deploy application via Argo CD (idempotent)"
-	@echo "  make verify      - Verify current version is running"
-	@echo "  make upgrade     - Upgrade to v2 and verify"
+	@echo "  make deploy      - Deploy application via Argo CD (idempotent, registers app if needed)"
+	@echo "  make verify      - Verify v1 is running"
+	@echo "  make upgrade     - Upgrade to v2 via GitOps and verify"
+	@echo "  make downgrade   - Downgrade to v1 via GitOps and verify"
 	@echo ""
 	@echo "=== Management ==="
 	@echo "  make status      - Show cluster status"
@@ -49,10 +50,18 @@ argocd: cluster
 	@echo "[→] Waiting for Argo CD to be ready..."; \
 	kubectl rollout status deployment/argocd-server -n $(ARGOCD_NS) --timeout=2m || true
 
-# Application deployment - idempotent
+# Application deployment - idempotent (via Argo CD)
 deploy: argocd
-	@echo "[→] Deploying application via Kustomize..."
-	@kubectl apply -k confs/
+	@echo "[→] Deploying application via Argo CD..."
+	@if kubectl get application $(APP_NAME) -n $(ARGOCD_NS) > /dev/null 2>&1; then \
+		echo "[✓] Application already exists, skipping creation"; \
+	else \
+		echo "[→] Creating Argo CD Application..."; \
+		kubectl apply -f confs/argocd-app.yaml; \
+	fi
+	@echo "[→] Waiting for Argo CD to sync..."
+	@sleep 5
+	@kubectl wait --for=condition=Synced application/$(APP_NAME) -n $(ARGOCD_NS) --timeout=2m || true
 	@echo "[→] Waiting for deployment to be ready..."
 	@kubectl rollout status deployment/macauchy-app -n $(DEV_NS) --timeout=2m || true
 	@echo "[→] Verifying deployment exists..."
@@ -77,7 +86,7 @@ verify: deploy
 	echo "[✗] v1 not responding properly: $$RESPONSE"; \
 	exit 1
 
-# Upgrade to v2
+# Upgrade to v2 (via GitOps)
 upgrade: deploy
 	@echo "[→] Checking current version..."
 	@CURRENT_VERSION=$$(grep "image: wil42/playground" confs/deployment.yaml | grep -o 'v[0-9]' || echo "unknown"); \
@@ -87,9 +96,12 @@ upgrade: deploy
 	fi
 	@echo "[→] Upgrading to v2..."
 	@sed -i 's/wil42\/playground:v1/wil42\/playground:v2/g' confs/deployment.yaml
-	@echo "[→] Redeploying with v2..."
-	@kubectl apply -k confs/
-	@echo "[→] Waiting for v2 deployment..."
+	@echo "[→] Committing and pushing to Git..."
+	@git add confs/deployment.yaml
+	@git commit -m "upgrade: deploy v2 image" || echo "(Already committed)"
+	@git push origin main
+	@echo "[→] Waiting for Argo CD to sync..."
+	@sleep 10
 	@kubectl rollout status deployment/macauchy-app -n $(DEV_NS) --timeout=2m || true
 	@echo "[→] Verifying v2 is running..."
 	@for i in 1 2 3; do \
@@ -108,7 +120,7 @@ upgrade: deploy
 	echo "[✗] v2 not responding properly: $$RESPONSE"; \
 	exit 1
 
-# Downgrade back to v1 (for testing rollback)
+# Downgrade back to v1 (for testing rollback, via GitOps)
 downgrade: deploy
 	@echo "[→] Checking current version..."
 	@CURRENT_VERSION=$$(grep "image: wil42/playground" confs/deployment.yaml | grep -o 'v[0-9]' || echo "unknown"); \
@@ -118,10 +130,12 @@ downgrade: deploy
 	fi
 	@echo "[→] Downgrading back to v1..."
 	@sed -i 's/wil42\/playground:v2/wil42\/playground:v1/g' confs/deployment.yaml
-	@echo "[→] Redeploying with v1..."
-	@kubectl apply -k confs/
-	@echo "[→] Waiting for v1 deployment..."
-	@sleep 8
+	@echo "[→] Committing and pushing to Git..."
+	@git add confs/deployment.yaml
+	@git commit -m "downgrade: deploy v1 image" || echo "(Already committed)"
+	@git push origin main
+	@echo "[→] Waiting for Argo CD to sync..."
+	@sleep 10
 	@kubectl rollout status deployment/macauchy-app -n $(DEV_NS) --timeout=2m || true
 	@echo "[→] Verifying v1 is running..."
 	@for i in 1 2 3; do \

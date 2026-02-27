@@ -145,9 +145,9 @@ curl -sfL https://get.k3s.io | K3S_URL=https://192.168.56.110:6443 \
 | K3s server mode | Required | Deployed | ✅ |
 | 3 web applications | Required | app-one, app-two, app-three | ✅ |
 | Host-based routing | Required | Traefik ingress | ✅ |
-| app1.com routing | Required | → app-one-svc | ✅ |
-| app2.com routing | Required | → app-two-svc (3 replicas) | ✅ |
-| Default route | Required | → app-three-svc | ✅ |
+| app1.com routing | Required | → app-one | ✅ |
+| app2.com routing | Required | → app-two (3 replicas) | ✅ |
+| Default route | Required | → app-three | ✅ |
 | Application replicas | 1, 3, 1 | Correctly set | ✅ |
 
 #### Vagrantfile Configuration
@@ -190,7 +190,7 @@ Replicas: 1
 Image: hashicorp/http-echo
 Args: "-text=Hello from App One"
 Port: 5678
-Service: app-one-svc (ClusterIP, port 80 → 5678)
+Service: app-one (ClusterIP, port 80 → 5678)
 ```
 ✅ Valid
 
@@ -201,7 +201,7 @@ Replicas: 3 (demonstrates scaling)
 Image: hashicorp/http-echo
 Args: "-text=Hello from App Two"
 Port: 5678
-Service: app-two-svc (ClusterIP, port 80 → 5678)
+Service: app-two (ClusterIP, port 80 → 5678)
 ```
 ✅ Valid
 
@@ -212,7 +212,7 @@ Replicas: 1
 Image: hashicorp/http-echo
 Args: "-text=Hello from App Three"
 Port: 5678
-Service: app-three-svc (ClusterIP, port 80 → 5678)
+Service: app-three (ClusterIP, port 80 → 5678)
 ```
 ✅ Valid
 
@@ -235,17 +235,17 @@ ingressClassName: traefik
 
 1. **Host: app1.com**
    - Path: / (Prefix)
-   - Backend: app-one-svc:80
+   - Backend: app-one:80
    ✅ Correct
 
 2. **Host: app2.com**
    - Path: / (Prefix)
-   - Backend: app-two-svc:80
+   - Backend: app-two:80
    ✅ Correct
 
 3. **Default (no host)**
    - Path: / (Prefix)
-   - Backend: app-three-svc:80
+   - Backend: app-three:80
    ✅ Correct (catch-all for unmatched hosts)
 
 **Validation Results:**

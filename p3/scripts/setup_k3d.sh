@@ -12,11 +12,6 @@ REGISTRY_PORT="5000"
 echo "Step 1: Creating K3d cluster '$CLUSTER_NAME'..."
 echo "This may take a minute..."
 
-# Create K3d cluster with:
-# - 1 server (control plane)
-# - 2 agents (worker nodes)
-# - Port 80 and 443 mapped to localhost for ingress
-# - Local registry for pulling images
 k3d cluster create "$CLUSTER_NAME" \
   --servers 1 \
   --agents 2 \
@@ -29,7 +24,6 @@ echo "✓ K3d cluster created successfully"
 echo ""
 
 echo "Step 2: Waiting for cluster to be ready..."
-# Wait for nodes to be ready
 kubectl wait --for=condition=Ready node --all --timeout=300s 2>/dev/null || true
 sleep 5
 
@@ -37,7 +31,7 @@ echo "✓ Cluster nodes are ready"
 echo ""
 
 echo "Step 3: Creating namespaces..."
-# Create the required namespaces
+
 kubectl create namespace argocd 2>/dev/null || echo "  (argocd namespace may already exist)"
 kubectl create namespace dev 2>/dev/null || echo "  (dev namespace may already exist)"
 

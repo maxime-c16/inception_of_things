@@ -113,7 +113,7 @@ kubectl get deployments
 
 # Verify services created
 kubectl get services
-# Expected: app-one-svc, app-two-svc, app-three-svc (all ClusterIP type)
+# Expected: app-one, app-two, app-three (all ClusterIP type)
 
 # Deploy Traefik ingress routing
 kubectl apply -f /vagrant/confs/ingress.yaml
